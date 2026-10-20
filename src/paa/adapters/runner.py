@@ -13,10 +13,11 @@ from collections.abc import Awaitable, Callable
 
 import websockets
 
+from ..chat.humanize import OutgoingPart
 from ..chat.wake import ChatMessage, WakePolicy
 from .onebot import InboundMessage, OneBotSender, parse_event
 
-Respond = Callable[[InboundMessage], Awaitable[str | None]]
+Respond = Callable[[InboundMessage], Awaitable[list[OutgoingPart] | None]]
 
 
 class OneBotRunner:
@@ -65,11 +66,26 @@ class OneBotRunner:
         if not verdict.wake:
             return None
 
-        reply = await self.respond(message)
-        if not reply:
+        parts = await self.respond(message)
+        if not parts:
+            self.log.debug("决定不回复", extra={"fields": {"chat": message.chat_key}})
             return None
-        self.sender.send(message.chat_key, reply)
-        return reply
+
+        for index, part in enumerate(parts):
+            await asyncio.to_thread(self.sender.send, message.chat_key, part.text)
+            if index < len(parts) - 1 and part.pause_after > 0:
+                await asyncio.sleep(part.pause_after)
+        self.log.info(
+            "已回复",
+            extra={
+                "fields": {
+                    "chat": message.chat_key,
+                    "parts": len(parts),
+                    "chars": sum(len(p.text) for p in parts),
+                }
+            },
+        )
+        return "".join(part.text for part in parts)
 
     async def run(self, *, stop: asyncio.Event | None = None) -> None:
         headers = {}

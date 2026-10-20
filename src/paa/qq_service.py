@@ -6,17 +6,21 @@
 from __future__ import annotations
 
 import asyncio
+import random
 import uuid
+from datetime import datetime
 
 from sqlalchemy import select
 
 from .adapters.onebot import InboundMessage, OneBotSender
 from .adapters.runner import OneBotRunner
 from .chat.history import MessageStore
+from .chat.humanize import OutgoingPart, plan
 from .chat.session import ChatSession
 from .config import Settings
 from .db import session_scope
 from .llm import BrainRouter
+from .logging import get_logger
 from .memory import MemoryService
 from .models import User
 from .persona import PersonaCard
@@ -57,8 +61,20 @@ class QqService:
         )
         self._task: asyncio.Task | None = None
         self._stop: asyncio.Event | None = None
+        self.log = get_logger("paa.qq")
 
-    async def respond(self, message: InboundMessage) -> str | None:
+    async def respond(self, message: InboundMessage) -> list[OutgoingPart] | None:
+        self.log.info(
+            "收到消息",
+            extra={
+                "fields": {
+                    "chat": message.chat_key,
+                    "from": message.sender_id,
+                    "group": message.is_group,
+                    "chars": len(message.text),
+                }
+            },
+        )
         session = self.sessions.get(message.chat_key)
         if session is None:
             user_id = await asyncio.to_thread(self._ensure_user, message.sender_id)
@@ -75,15 +91,30 @@ class QqService:
             )
             self.sessions[message.chat_key] = session
 
-        def _run() -> str:
+        def _run():
             with session_scope() as db:
                 return session.ask(
                     message.text,
                     memory=MemoryService(db),
                     store=MessageStore(db),
-                ).reply
+                )
 
-        return await asyncio.to_thread(_run)
+        result = await asyncio.to_thread(_run)
+        hour = datetime.now().hour
+        parts = plan(result.reply, hour=hour, rng=random.Random())
+        self.log.info(
+            "生成回复",
+            extra={
+                "fields": {
+                    "chat": message.chat_key,
+                    "provider": result.provider,
+                    "in_tokens": result.input_tokens,
+                    "out_tokens": result.output_tokens,
+                    "parts": len(parts),
+                }
+            },
+        )
+        return parts
 
     def _ensure_user(self, sender_id: str) -> uuid.UUID:
         with session_scope() as db:

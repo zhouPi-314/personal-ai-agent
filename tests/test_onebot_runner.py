@@ -2,6 +2,7 @@ import pytest
 
 from paa.adapters.onebot import InboundMessage
 from paa.adapters.runner import OneBotRunner
+from paa.chat.humanize import OutgoingPart
 
 
 class FakeSender:
@@ -39,7 +40,7 @@ async def test_private_message_triggers_reply():
 
     async def respond(message: InboundMessage):
         seen.append(message.text)
-        return "在的"
+        return [OutgoingPart(text="在的", typing_seconds=1.0)]
 
     result = await _runner(respond, sender).handle(_private_event(), now=0.0)
 
@@ -68,7 +69,7 @@ async def test_group_message_without_mention_is_ignored():
 @pytest.mark.asyncio
 async def test_group_message_with_mention_triggers_reply():
     async def respond(message):
-        return "怎么了"
+        return [OutgoingPart(text="怎么了", typing_seconds=1.0)]
 
     event = {
         "post_type": "message",
@@ -95,6 +96,21 @@ async def test_empty_reply_sends_nothing():
     await _runner(respond, sender).handle(_private_event(), now=0.0)
 
     assert sender.sent == []
+
+
+@pytest.mark.asyncio
+async def test_multi_part_reply_sends_each_part():
+    sender = FakeSender()
+
+    async def respond(message):
+        return [
+            OutgoingPart(text="第一句", typing_seconds=1.0, pause_after=0.0),
+            OutgoingPart(text="第二句", typing_seconds=1.0),
+        ]
+
+    await _runner(respond, sender).handle(_private_event(), now=0.0)
+
+    assert sender.sent == [("private:200", "第一句"), ("private:200", "第二句")]
 
 
 @pytest.mark.asyncio
