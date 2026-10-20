@@ -104,9 +104,12 @@ async function loadStatus() {
     const cards = Object.entries(s).map(([k, v]) =>
       `<div class="card"><b>${v}</b><span>${esc(label(k))}</span></div>`).join("");
     const cost = u.today_cost === null ? "未知" : `¥${Number(u.today_cost).toFixed(2)}`;
+    const quotaCard = u.quota > 0
+      ? `<div class="card"><b>${u.remaining}</b><span>今日剩余额度</span></div>`
+      : "";
     $("cards").innerHTML = cards +
       `<div class="card"><b>${u.today_total}</b><span>今日 token</span></div>` +
-      `<div class="card"><b>${cost}</b><span>今日费用</span></div>`;
+      `<div class="card"><b>${cost}</b><span>今日费用</span></div>` + quotaCard;
   } catch (e) {
     $("cards").innerHTML = `<div class="err">状态读取失败：${esc(e.message)}</div>`;
   }

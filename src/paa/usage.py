@@ -81,3 +81,9 @@ class UsageService:
             return 0.0
         last = series[-1]
         return None if last["unpriced"] else last["cost"]
+
+    def remaining(self, quota: int) -> int | None:
+        """今日剩余额度；quota<=0 表示不限制（返回 None）。"""
+        if quota <= 0:
+            return None
+        return max(0, quota - self.today_total())

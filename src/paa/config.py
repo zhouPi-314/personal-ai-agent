@@ -38,6 +38,7 @@ class Settings(BaseSettings):
     log_file: str = ""
     ui_token: str = ""
     pricing_path: str = "pricing.json"
+    daily_token_quota: int = 0  # 0 = 不限制
 
     # OneBot（可选）
     onebot_ws_url: str = ""

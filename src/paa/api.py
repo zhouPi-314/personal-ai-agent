@@ -138,5 +138,7 @@ def usage(days: int = Query(default=7, ge=1, le=90)) -> dict:
         return {
             "today_total": service.today_total(),
             "today_cost": service.today_cost(),
+            "quota": get_settings().daily_token_quota,
+            "remaining": service.remaining(get_settings().daily_token_quota),
             "series": service.daily_series(days),
         }

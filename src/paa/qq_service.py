@@ -63,6 +63,7 @@ class QqService:
         self._task: asyncio.Task | None = None
         self._stop: asyncio.Event | None = None
         self.log = get_logger("paa.qq")
+        self._quota_notice_day: str | None = None
 
     async def respond(self, message: InboundMessage) -> list[OutgoingPart] | None:
         self.log.info(
@@ -91,6 +92,21 @@ class QqService:
                 ),
             )
             self.sessions[message.chat_key] = session
+
+        quota = self.settings.daily_token_quota
+        if quota > 0:
+            with session_scope() as db:
+                remaining = UsageService(db).remaining(quota)
+            if remaining == 0:
+                today = datetime.now().strftime("%Y-%m-%d")
+                if self._quota_notice_day == today:
+                    return None
+                self._quota_notice_day = today
+                self.log.warning(
+                    "用量配额已用尽",
+                    extra={"fields": {"quota": quota, "chat": message.chat_key}},
+                )
+                return [OutgoingPart(text="今天聊得有点多了，我先歇会儿，明天再找你。")]
 
         def _run():
             with session_scope() as db:

@@ -44,3 +44,22 @@ def test_paid_model_math(monkeypatch, tmp_path):
 
 def test_unknown_model_returns_none():
     assert pricing.cost_of("never-registered", 1, 1) is None
+
+
+def test_quota_math(session):
+    from paa.usage import UsageService
+
+    service = UsageService(session)
+    assert service.remaining(0) is None
+    before = service.today_total()
+    service.record(
+        user_id=None,
+        source="chat",
+        provider="primary",
+        model="free-x",
+        input_tokens=600_000,
+        output_tokens=0,
+    )
+    total = before + 600_000
+    assert service.remaining(total + 1_000_000) == 1_000_000
+    assert service.remaining(total) == 0
