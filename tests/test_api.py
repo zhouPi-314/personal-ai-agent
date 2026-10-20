@@ -2,11 +2,14 @@ import uuid
 
 from fastapi.testclient import TestClient
 
+from paa.config import get_settings
 from paa.main import create_app
 
 
 def _client() -> TestClient:
-    return TestClient(create_app())
+    token = get_settings().ui_token
+    headers = {"X-PAA-Token": token} if token else {}
+    return TestClient(create_app(), headers=headers)
 
 
 def test_status_counts():

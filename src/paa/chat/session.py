@@ -12,6 +12,7 @@ from ..llm import BrainRouter
 from ..memory import MemoryService
 from ..memory.render import render_memories
 from ..persona import PersonaCard, build_system_prompt
+from ..usage import UsageService
 from .history import MessageStore
 
 MAX_HISTORY = 20
@@ -35,6 +36,7 @@ class ChatSession:
         user_id: uuid.UUID,
         situation: str = "你在和这个人一对一聊天。",
         store: MessageStore | None = None,
+        usage: UsageService | None = None,
         source: str = "cli",
         history: list[dict[str, str]] | None = None,
     ) -> None:
@@ -44,6 +46,7 @@ class ChatSession:
         self.user_id = user_id
         self.situation = situation
         self.store = store
+        self.usage = usage
         self.source = source
         self._history: list[dict[str, str]] = list(history or [])
 
@@ -57,6 +60,7 @@ class ChatSession:
         *,
         memory: MemoryService | None = None,
         store: MessageStore | None = None,
+        usage: UsageService | None = None,
     ) -> TurnResult:
         text = (text or "").strip()
         if not text:
@@ -64,6 +68,7 @@ class ChatSession:
 
         memory = memory or self.memory
         store = store or self.store
+        usage = usage or self.usage
         if memory is None:
             raise ValueError("缺少 MemoryService")
 
@@ -98,6 +103,15 @@ class ChatSession:
                 reply=reply,
                 source=self.source,
                 provider=routed.provider,
+                input_tokens=routed.completion.input_tokens,
+                output_tokens=routed.completion.output_tokens,
+            )
+        if usage is not None:
+            usage.record(
+                user_id=self.user_id,
+                source=self.source,
+                provider=routed.provider,
+                model=routed.completion.model,
                 input_tokens=routed.completion.input_tokens,
                 output_tokens=routed.completion.output_tokens,
             )

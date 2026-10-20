@@ -24,6 +24,7 @@ from .logging import get_logger
 from .memory import MemoryService
 from .models import User
 from .persona import PersonaCard
+from .usage import UsageService
 
 
 def _user_for(db, display_name: str) -> User:
@@ -97,6 +98,7 @@ class QqService:
                     message.text,
                     memory=MemoryService(db),
                     store=MessageStore(db),
+                    usage=UsageService(db),
                 )
 
         result = await asyncio.to_thread(_run)

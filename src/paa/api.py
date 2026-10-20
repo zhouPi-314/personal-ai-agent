@@ -14,6 +14,7 @@ from .config import get_settings
 from .db import session_scope
 from .memory import MemoryService
 from .models import AuditLog, Memory, Message, Task
+from .usage import UsageService
 
 router = APIRouter(prefix="/api")
 
@@ -128,3 +129,10 @@ def list_audit(limit: int = Query(default=100, ge=1, le=500)) -> list[dict]:
         }
         for a in rows
     ]
+
+
+@router.get("/usage", dependencies=[Depends(require_token)])
+def usage(days: int = Query(default=7, ge=1, le=90)) -> dict:
+    with session_scope() as db:
+        service = UsageService(db)
+        return {"today_total": service.today_total(), "series": service.daily_series(days)}

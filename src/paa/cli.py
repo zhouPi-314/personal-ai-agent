@@ -25,6 +25,7 @@ from .llm.factory import build_router
 from .memory import MemoryService
 from .models import User
 from .persona import load_default_card
+from .usage import UsageService
 
 
 def _probe(url: str, timeout: float = 1.0) -> bool:
@@ -117,6 +118,7 @@ def main(argv: list[str] | None = None) -> int:
                     text,
                     memory=MemoryService(db),
                     store=MessageStore(db),
+                    usage=UsageService(db),
                 )
         except Exception as exc:  # noqa: BLE001 - 调试用的顶层兜底
             print(f"[出错] {exc}")
