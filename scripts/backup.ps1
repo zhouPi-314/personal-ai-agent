@@ -1,4 +1,4 @@
-# PostgreSQL 备份：本地保留 7 份；带 -Upload 时加密后上传到 ECS。
+﻿# PostgreSQL 备份：本地保留 7 份；带 -Upload 时加密后上传到 ECS。
 # 密码来源：.env 的 PAA_DATABASE_URL；备份加密口令来源：%USERPROFILE%\.paa\backup.key
 param(
     [switch]$Upload,

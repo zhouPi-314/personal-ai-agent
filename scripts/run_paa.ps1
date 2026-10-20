@@ -1,4 +1,4 @@
-# 常驻运行入口：由计划任务在登录时调用。
+﻿# 常驻运行入口：由计划任务在登录时调用。
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 $logDir = Join-Path $root 'logs'
