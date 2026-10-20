@@ -40,6 +40,14 @@ python -m venv .venv
 
 配置全部来自环境变量（前缀 `PAA_`），见 `.env.example`；`.env` 不会入库。
 
+## 常驻运行
+
+`scripts/run_paa.ps1` 是一个自重启循环（进程退出后 5 秒重拉），日志由 Python 直接写入
+`logs/paa-serve.log`（UTF-8 JSON）。
+
+开机自启：把指向它的 `.vbs` 放进 `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup`，
+这样登录后不弹窗口直接运行。停掉服务 = 结束 `run_paa.ps1` 的 powershell 进程。
+
 ## 工具
 
 - REA（逆向分析 MCP）：装在 `D:\Tools\rea`，已注册到 Codex 的 `mcp_servers.rea`，`D:\Tools\rea` 已加入用户 PATH。

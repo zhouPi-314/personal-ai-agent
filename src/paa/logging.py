@@ -29,12 +29,23 @@ def configure(
     level: str = "INFO",
     *,
     stream: TextIO | None = None,
+    log_file: str | None = None,
 ) -> logging.Logger:
     logger = logging.getLogger("paa")
     logger.handlers.clear()
     handler = logging.StreamHandler(stream or sys.stderr)
     handler.setFormatter(JsonFormatter())
     logger.addHandler(handler)
+
+    if log_file:
+        from pathlib import Path
+
+        path = Path(log_file)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        file_handler = logging.FileHandler(path, encoding="utf-8")
+        file_handler.setFormatter(JsonFormatter())
+        logger.addHandler(file_handler)
+
     logger.setLevel(level.upper())
     logger.propagate = False
     return logger

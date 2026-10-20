@@ -14,7 +14,7 @@ from fastapi import FastAPI, Response
 from sqlalchemy import text
 
 from . import __version__
-from .config import get_settings
+from .config import PROJECT_ROOT, get_settings
 from .db import get_engine, session_scope
 from .llm.factory import build_router
 from .logging import configure
@@ -47,7 +47,10 @@ def create_app(router=None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
         settings = get_settings()
-        logger = configure(settings.log_level)
+        logger = configure(
+            settings.log_level,
+            log_file=str(PROJECT_ROOT / settings.log_file) if settings.log_file else None,
+        )
         logger.info("服务启动", extra={"fields": {"version": __version__, "env": settings.env}})
 
         try:

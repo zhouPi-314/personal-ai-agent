@@ -35,6 +35,7 @@ class Settings(BaseSettings):
 
     persona_path: str = "persona.md"
     user_name: str = "owner"
+    log_file: str = ""
 
     # OneBot（可选）
     onebot_ws_url: str = ""
