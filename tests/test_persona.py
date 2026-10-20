@@ -74,3 +74,7 @@ def test_load_card_strips_and_keeps_path(tmp_path):
     assert card.text == "你叫小满"
     assert card.name == "me"
     assert card.path == file
+
+
+def test_base_rules_forbid_fabricated_personal_history():
+    assert "不编造具体的个人经历" in BASE_RULES
