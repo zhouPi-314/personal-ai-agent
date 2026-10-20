@@ -48,6 +48,17 @@ python -m venv .venv
 开机自启：把指向它的 `.vbs` 放进 `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup`，
 这样登录后不弹窗口直接运行。停掉服务 = 结束 `run_paa.ps1` 的 powershell 进程。
 
+## 备份
+
+```powershell
+pwsh -File scripts/backup.ps1            # 本地备份（保留 7 份，自动校验归档）
+pwsh -File scripts/backup.ps1 -Upload    # 额外加密上传到 ECS（远端保留 8 份）
+```
+
+- 本地文件落在 `backups/`（已 gitignore）
+- 加密口令读取 `%USERPROFILE%\.paa\backup.key`，**不要**与数据库密码相同，也不要提交到仓库
+- 备份文件用 `pg_restore --list` 校验结构；真正的恢复演练记录在 `STATUS.md`
+
 ## 工具
 
 - REA（逆向分析 MCP）：装在 `D:\Tools\rea`，已注册到 Codex 的 `mcp_servers.rea`，`D:\Tools\rea` 已加入用户 PATH。
