@@ -211,7 +211,7 @@ ssh -i "$env:USERPROFILE\.ssh\paa_ecs" paa@<公网IP>
 **下次开机后按此顺序继续**：
 
 1. Workbench 登录，确认 `/home/paa/.ssh/authorized_keys` 有 1 行、88–89 字节。
-2. `ssh-keygen -lf /home/paa/.ssh/authorized_keys` 输出必须为 `SHA256:yUn/NKZg4O6guPoJzEbvnZpq79hVHr5LgXfHe9E16k4`。
+2. `ssh-keygen -lf /home/paa/.ssh/authorized_keys` 输出的指纹必须与本机 `.pub` 的指纹一致。
 3. 指纹对上后从 Windows 用 `ssh -i ~/.ssh/paa_ecs paa@<公网IP>` 验证，再继续批次 B（删 3389）与批次 C。
 
 **未完成且不可跳过**：安全组 3389 仍对公网开放；`PermitRootLogin` 仍为 `yes`；UFW 仍为 `inactive`；80 个包未升级。
