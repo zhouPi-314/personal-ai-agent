@@ -20,7 +20,8 @@ from .chat.history import MessageStore
 from .chat.session import ChatSession
 from .config import get_settings
 from .db import session_scope
-from .llm import BrainRouter, ModelClient
+from .llm import BrainRouter
+from .llm.factory import build_router
 from .memory import MemoryService
 from .models import User
 from .persona import load_default_card
@@ -39,34 +40,10 @@ def _probe(url: str, timeout: float = 1.0) -> bool:
 
 
 def _build_router() -> BrainRouter:
-    settings = get_settings()
-    primary = (
-        ModelClient(
-            base_url=settings.local_base_url,
-            api_key=settings.local_api_key,
-            model=settings.local_model or settings.model_name,
-        )
-        if settings.local_base_url
-        else None
-    )
-    fallback = (
-        ModelClient(
-            base_url=settings.model_base_url,
-            api_key=settings.model_api_key,
-            model=settings.model_name,
-        )
-        if settings.model_base_url
-        else None
-    )
-
-    if primary and fallback:
-        return BrainRouter(primary=primary, fallback=fallback)
-    if primary:
-        # 只配了本机通道：单通道模式，主备指向同一端点
-        return BrainRouter(primary=primary, fallback=primary)
-    if fallback:
-        return BrainRouter(primary=fallback, fallback=fallback)
-    raise SystemExit("至少配置 PAA_LOCAL_BASE_URL 或 PAA_MODEL_BASE_URL 之一")
+    try:
+        return build_router(get_settings())
+    except RuntimeError as exc:
+        raise SystemExit(str(exc)) from exc
 
 
 def _get_or_create_user(db, name: str) -> User:

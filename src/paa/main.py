@@ -16,7 +16,10 @@ from sqlalchemy import text
 from . import __version__
 from .config import get_settings
 from .db import get_engine, session_scope
+from .llm.factory import build_router
 from .logging import configure
+from .persona import PersonaCard, load_default_card
+from .qq_service import QqService
 from .tasks.engine import TaskEngine
 
 
@@ -33,7 +36,13 @@ def _probe(url: str, timeout: float = 1.0) -> bool:
 
 
 def create_app(router=None) -> FastAPI:
-    state: dict[str, object] = {"db_ok": False, "primary_ok": None, "recovered": 0}
+    state: dict[str, object] = {
+        "db_ok": False,
+        "primary_ok": None,
+        "recovered": 0,
+        "router_ready": False,
+        "qq_enabled": False,
+    }
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
@@ -57,7 +66,31 @@ def create_app(router=None) -> FastAPI:
                 router.demote()
             logger.info("主通道探测", extra={"fields": {"reachable": reachable}})
 
+        card: PersonaCard | None = None
+        try:
+            card = load_default_card()
+        except Exception:  # noqa: BLE001 - 人格卡缺失不阻止服务启动
+            card = None
+
+        active_router = router
+        if active_router is None:
+            try:
+                active_router = build_router(settings)
+            except Exception as exc:  # noqa: BLE001
+                logger.error("模型链路未就绪", extra={"fields": {"error": str(exc)}})
+        state["router_ready"] = active_router is not None
+
+        qq: QqService | None = None
+        if active_router is not None and card is not None and settings.onebot_ws_url:
+            qq = QqService(settings=settings, router=active_router, card=card)
+            qq.start()
+            state["qq_enabled"] = True
+            logger.info("QQ 入口已启动", extra={"fields": {"ws": settings.onebot_ws_url}})
+
         yield
+
+        if qq is not None:
+            await qq.stop()
         logger.info("服务关闭")
 
     app = FastAPI(title="PAA", version=__version__, lifespan=lifespan)
@@ -76,6 +109,8 @@ def create_app(router=None) -> FastAPI:
             "db": state["db_ok"],
             "primary_reachable": state["primary_ok"],
             "recovered_tasks": state["recovered"],
+            "router_ready": state["router_ready"],
+            "qq_enabled": state["qq_enabled"],
         }
 
     return app

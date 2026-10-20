@@ -41,6 +41,7 @@ class Settings(BaseSettings):
     onebot_http_url: str = ""
     onebot_access_token: str = ""
     onebot_self_id: str = ""
+    owner_qq: str = ""
 
 
 @lru_cache
