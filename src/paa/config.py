@@ -36,6 +36,12 @@ class Settings(BaseSettings):
     persona_path: str = "persona.md"
     user_name: str = "owner"
 
+    # OneBot（可选）
+    onebot_ws_url: str = ""
+    onebot_http_url: str = ""
+    onebot_access_token: str = ""
+    onebot_self_id: str = ""
+
 
 @lru_cache
 def get_settings() -> Settings:
