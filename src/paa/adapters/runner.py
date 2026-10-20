@@ -79,7 +79,10 @@ class OneBotRunner:
         backoff = 1.0
         while stop is None or not stop.is_set():
             try:
-                async with websockets.connect(self.ws_url, additional_headers=headers) as ws:
+                # proxy=None：网关永远在回环，走系统代理只会拿到 502/握手失败
+                async with websockets.connect(
+                    self.ws_url, additional_headers=headers, proxy=None
+                ) as ws:
                     backoff = 1.0
                     self.log.info("已连接 OneBot 网关")
                     async for raw in ws:
