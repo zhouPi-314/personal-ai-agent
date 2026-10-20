@@ -103,8 +103,10 @@ async function loadStatus() {
     const [s, u] = await Promise.all([api("/api/status"), api("/api/usage")]);
     const cards = Object.entries(s).map(([k, v]) =>
       `<div class="card"><b>${v}</b><span>${esc(label(k))}</span></div>`).join("");
+    const cost = u.today_cost === null ? "未知" : `¥${Number(u.today_cost).toFixed(2)}`;
     $("cards").innerHTML = cards +
-      `<div class="card"><b>${u.today_total}</b><span>今日 token</span></div>`;
+      `<div class="card"><b>${u.today_total}</b><span>今日 token</span></div>` +
+      `<div class="card"><b>${cost}</b><span>今日费用</span></div>`;
   } catch (e) {
     $("cards").innerHTML = `<div class="err">状态读取失败：${esc(e.message)}</div>`;
   }

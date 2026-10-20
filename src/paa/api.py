@@ -135,4 +135,8 @@ def list_audit(limit: int = Query(default=100, ge=1, le=500)) -> list[dict]:
 def usage(days: int = Query(default=7, ge=1, le=90)) -> dict:
     with session_scope() as db:
         service = UsageService(db)
-        return {"today_total": service.today_total(), "series": service.daily_series(days)}
+        return {
+            "today_total": service.today_total(),
+            "today_cost": service.today_cost(),
+            "series": service.daily_series(days),
+        }

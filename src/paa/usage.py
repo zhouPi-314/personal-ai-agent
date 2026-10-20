@@ -9,6 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from .models import TokenUsage
+from .pricing import cost_of
 
 
 class UsageService:
@@ -49,14 +50,34 @@ class UsageService:
         stmt = (
             select(
                 func.date(TokenUsage.created_at).label("day"),
+                TokenUsage.model,
                 func.coalesce(func.sum(TokenUsage.input_tokens), 0).label("input"),
                 func.coalesce(func.sum(TokenUsage.output_tokens), 0).label("output"),
             )
             .where(TokenUsage.created_at >= since)
-            .group_by("day")
+            .group_by("day", TokenUsage.model)
             .order_by("day")
         )
-        return [
-            {"day": str(row.day), "input": int(row.input), "output": int(row.output)}
-            for row in self.session.execute(stmt)
-        ]
+        buckets: dict[str, dict] = {}
+        for row in self.session.execute(stmt):
+            day = str(row.day)
+            bucket = buckets.setdefault(
+                day, {"day": day, "input": 0, "output": 0, "cost": 0.0, "unpriced": False}
+            )
+            bucket["input"] += int(row.input)
+            bucket["output"] += int(row.output)
+            value = cost_of(row.model or "", int(row.input), int(row.output))
+            if value is None:
+                bucket["unpriced"] = True
+            else:
+                bucket["cost"] += value
+        for bucket in buckets.values():
+            bucket["cost"] = round(bucket["cost"], 4)
+        return [buckets[key] for key in sorted(buckets)]
+
+    def today_cost(self) -> float | None:
+        series = self.daily_series(1)
+        if not series:
+            return 0.0
+        last = series[-1]
+        return None if last["unpriced"] else last["cost"]

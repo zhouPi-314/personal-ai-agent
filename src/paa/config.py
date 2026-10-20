@@ -37,6 +37,7 @@ class Settings(BaseSettings):
     user_name: str = "owner"
     log_file: str = ""
     ui_token: str = ""
+    pricing_path: str = "pricing.json"
 
     # OneBot（可选）
     onebot_ws_url: str = ""

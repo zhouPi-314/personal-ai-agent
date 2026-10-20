@@ -15,6 +15,7 @@ data/
 logs/
 work/
 backups/
+pricing.json
 *.sqlite3
 *.db
 
