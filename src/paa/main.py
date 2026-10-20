@@ -14,6 +14,7 @@ from fastapi import FastAPI, Response
 from sqlalchemy import text
 
 from . import __version__
+from .api import router as api_router
 from .config import PROJECT_ROOT, get_settings
 from .db import get_engine, session_scope
 from .llm.factory import build_router
@@ -99,6 +100,8 @@ def create_app(router=None) -> FastAPI:
     app = FastAPI(title="PAA", version=__version__, lifespan=lifespan)
     app.state.health = state
     app.state.router = router
+    app.include_router(api_router)
+    app.include_router(api_router)
 
     @app.get("/healthz")
     def healthz(response: Response) -> dict[str, object]:

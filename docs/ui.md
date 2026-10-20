@@ -55,3 +55,16 @@
 
 阶段 4。界面是数据的投影，先有消息、任务、审计数据，界面才有东西可显示。
 现在做只能摆一堆空表格。
+
+## 已实现的 API
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/api/status` | 消息/记忆/任务/审计条数 |
+| GET | `/api/messages?limit&before_id` | 消息列表（倒序、游标分页） |
+| GET | `/api/memories?kind&include_revoked` | 记忆列表 |
+| POST | `/api/memories/{id}/revoke` | 撤销一条记忆 |
+| GET | `/api/tasks` | 任务列表 |
+| GET | `/api/audit` | 审计记录 |
+
+配置 `PAA_UI_TOKEN` 后，除 `/api/status` 外的接口都需要请求头 `X-PAA-Token`。
