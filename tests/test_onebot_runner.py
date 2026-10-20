@@ -20,6 +20,7 @@ def _runner(respond, sender=None):
         self_id="100",
         sender=sender or FakeSender(),
         respond=respond,
+        owner_ids=frozenset({"200"}),
     )
 
 
@@ -58,7 +59,7 @@ async def test_group_message_without_mention_is_ignored():
         "post_type": "message",
         "message_type": "group",
         "self_id": 100,
-        "user_id": 200,
+        "user_id": 999,
         "group_id": 300,
         "message": [{"type": "text", "data": {"text": "今天好热"}}],
     }
@@ -75,7 +76,7 @@ async def test_group_message_with_mention_triggers_reply():
         "post_type": "message",
         "message_type": "group",
         "self_id": 100,
-        "user_id": 200,
+        "user_id": 999,
         "group_id": 300,
         "message": [
             {"type": "at", "data": {"qq": 100}},
@@ -119,3 +120,14 @@ async def test_heartbeat_is_ignored():
         raise AssertionError("不应该回复")
 
     assert await _runner(respond).handle({"post_type": "meta_event"}, now=0.0) is None
+
+
+@pytest.mark.asyncio
+async def test_private_message_from_stranger_is_ignored():
+    async def respond(message):  # pragma: no cover
+        raise AssertionError("陌生人不应该得到回复")
+
+    event = _private_event()
+    event["user_id"] = 999  # 不在 owner_ids 里
+
+    assert await _runner(respond).handle(event, now=0.0) is None

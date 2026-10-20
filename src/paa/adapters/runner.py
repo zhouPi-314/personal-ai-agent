@@ -44,8 +44,9 @@ class OneBotRunner:
 
     def policy_for(self, chat_key: str) -> WakePolicy:
         if chat_key not in self.policies:
-            mode = "active" if chat_key.startswith("private:") else "diving"
-            self.policies[chat_key] = WakePolicy(mode=mode, owner_ids=self.owner_ids)
+            # 私聊同样默认潜水：只有 owner_ids 里的号码能唤醒。
+            # 否则陌生人私聊机器人就能白嫖模型、写记忆、消耗配额。
+            self.policies[chat_key] = WakePolicy(mode="diving", owner_ids=self.owner_ids)
         return self.policies[chat_key]
 
     async def handle(self, payload: dict, *, now: float) -> str | None:
