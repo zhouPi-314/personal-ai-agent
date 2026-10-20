@@ -1,0 +1,6 @@
+# 仓库内统一 LF；PowerShell 脚本在 Windows 上保留 CRLF
+* text=auto eol=lf
+
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+*.png binary

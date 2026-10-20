@@ -1,0 +1,14 @@
+repos:
+  - repo: local
+    hooks:
+      - id: secret-scan
+        name: secret scan
+        entry: pwsh -NoProfile -File scripts/secret-scan.ps1
+        language: system
+        pass_filenames: false
+        always_run: true
+      - id: ruff
+        name: ruff
+        entry: ruff check src tests
+        language: system
+        pass_filenames: false
