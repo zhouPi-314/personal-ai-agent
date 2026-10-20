@@ -11,6 +11,7 @@ from contextlib import asynccontextmanager
 from urllib.parse import urlparse
 
 from fastapi import FastAPI, Response
+from fastapi.responses import FileResponse
 from sqlalchemy import text
 
 from . import __version__
@@ -101,6 +102,14 @@ def create_app(router=None) -> FastAPI:
     app.state.health = state
     app.state.router = router
     app.include_router(api_router)
+
+    @app.get("/", include_in_schema=False)
+    def ui() -> FileResponse:
+        return FileResponse(PROJECT_ROOT / "static" / "index.html")
+
+    @app.get("/ui", include_in_schema=False)
+    def ui_alias() -> FileResponse:
+        return FileResponse(PROJECT_ROOT / "static" / "index.html")
     app.include_router(api_router)
 
     @app.get("/healthz")

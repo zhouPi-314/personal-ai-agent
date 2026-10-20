@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PAA 维护台</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.6 system-ui, "Microsoft YaHei", sans-serif;
+         background: #14161a; color: #e6e8eb; }
+  header { display: flex; align-items: center; gap: 12px; padding: 12px 16px;
+           border-bottom: 1px solid #262a31; position: sticky; top: 0;
+           background: #14161a; z-index: 2; }
+  h1 { font-size: 16px; margin: 0; font-weight: 600; }
+  .spacer { flex: 1; }
+  input, button { font: inherit; border-radius: 6px; border: 1px solid #333842;
+                  background: #1b1e24; color: #e6e8eb; padding: 6px 10px; }
+  button { cursor: pointer; }
+  button:hover { border-color: #4a5568; }
+  button.danger { border-color: #7f1d1d; color: #fca5a5; }
+  main { padding: 16px; max-width: 1100px; margin: 0 auto; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+           gap: 12px; margin-bottom: 20px; }
+  .card { background: #1b1e24; border: 1px solid #262a31; border-radius: 10px; padding: 12px; }
+  .card b { display: block; font-size: 22px; }
+  .card span { color: #9aa4b2; font-size: 12px; }
+  nav { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+  nav button.active { background: #2b3444; border-color: #3b4a63; }
+  .item { background: #1b1e24; border: 1px solid #262a31; border-radius: 8px;
+          padding: 10px 12px; margin-bottom: 8px; }
+  .meta { color: #9aa4b2; font-size: 12px; margin-bottom: 4px;
+          display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .chip { border: 1px solid #333842; border-radius: 999px; padding: 0 8px; font-size: 11px; }
+  .chip.local { border-color: #14532d; color: #86efac; }
+  .chip.cloud { border-color: #78350f; color: #fcd34d; }
+  .content { white-space: pre-wrap; word-break: break-word; }
+  .empty { color: #6b7280; text-align: center; padding: 24px; }
+  .err { color: #fca5a5; }
+</style>
+</head>
+<body>
+<header>
+  <h1>PAA 维护台</h1>
+  <span class="spacer"></span>
+  <input id="token" placeholder="访问令牌（未设置可留空）" size="28">
+  <button id="save">保存</button>
+  <button id="reload">刷新</button>
+</header>
+
+<main>
+  <div class="cards" id="cards"></div>
+  <nav id="tabs">
+    <button data-tab="messages" class="active">会话</button>
+    <button data-tab="memories">记忆</button>
+    <button data-tab="tasks">任务</button>
+    <button data-tab="audit">审计</button>
+  </nav>
+  <section id="list"><div class="empty">加载中…</div></section>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const state = { tab: "messages", token: localStorage.getItem("paa-token") || "" };
+
+$("token").value = state.token;
+$("save").onclick = () => {
+  state.token = $("token").value.trim();
+  localStorage.setItem("paa-token", state.token);
+  load();
+};
+$("reload").onclick = load;
+
+document.querySelectorAll("#tabs button").forEach((btn) => {
+  btn.onclick = () => {
+    document.querySelectorAll("#tabs button").forEach((b) => b.classList.remove("active"));
+    btn.classList.add("active");
+    state.tab = btn.dataset.tab;
+    load();
+  };
+});
+
+async function api(path, options = {}) {
+  const headers = { ...(options.headers || {}) };
+  if (state.token) headers["X-PAA-Token"] = state.token;
+  const res = await fetch(path, { ...options, headers });
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+  return res.json();
+}
+
+function esc(s) {
+  return String(s ?? "").replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+function time(iso) {
+  const d = new Date(iso);
+  return isNaN(d) ? iso : d.toLocaleString("zh-CN", { hour12: false });
+}
+
+async function loadStatus() {
+  try {
+    const s = await api("/api/status");
+    $("cards").innerHTML = Object.entries(s).map(([k, v]) =>
+      `<div class="card"><b>${v}</b><span>${esc(label(k))}</span></div>`).join("");
+  } catch (e) {
+    $("cards").innerHTML = `<div class="err">状态读取失败：${esc(e.message)}</div>`;
+  }
+}
+
+function label(k) {
+  return { messages: "消息", memories: "记忆", tasks: "任务", audit_logs: "审计" }[k] || k;
+}
+
+function row(meta, body, actions = "") {
+  return `<div class="item"><div class="meta">${meta}</div>
+          <div class="content">${body}</div>${actions}</div>`;
+}
+
+async function loadMessages() {
+  const rows = await api("/api/messages?limit=50");
+  if (!rows.length) return `<div class="empty">还没有消息</div>`;
+  return rows.map((m) => {
+    const who = m.role === "user" ? "你" : "她";
+    const chip = m.provider
+      ? `<span class="chip ${m.provider === "primary" ? "local" : "cloud"}">${m.provider === "primary" ? "本地" : "云端"}</span>`
+      : "";
+    return row(
+      `<span>#${m.id}</span><span>${who}</span><span class="chip">${esc(m.source)}</span>${chip}
+       <span>${time(m.created_at)}</span><span>in ${m.input_tokens} / out ${m.output_tokens}</span>`,
+      esc(m.content));
+  }).join("");
+}
+
+async function loadMemories() {
+  const rows = await api("/api/memories?limit=100");
+  if (!rows.length) return `<div class="empty">还没有记忆</div>`;
+  return rows.map((m) => row(
+    `<span class="chip">${esc(m.kind)}</span><span>置信度 ${(m.confidence ?? 0).toFixed(2)}</span>
+     <span>${time(m.created_at)}</span>`,
+    esc(m.content),
+    `<div style="margin-top:8px"><button class="danger" data-revoke="${esc(m.id)}">撤销</button></div>`
+  )).join("");
+}
+
+async function loadTasks() {
+  const rows = await api("/api/tasks?limit=50");
+  if (!rows.length) return `<div class="empty">还没有任务</div>`;
+  return rows.map((t) => row(
+    `<span class="chip">${esc(t.status)}</span><span>${time(t.created_at)}</span>`,
+    esc(t.title) + (t.error ? `\n<span class="err">${esc(t.error)}</span>` : "")
+  )).join("");
+}
+
+async function loadAudit() {
+  const rows = await api("/api/audit?limit=100");
+  if (!rows.length) return `<div class="empty">还没有审计记录</div>`;
+  return rows.map((a) => row(
+    `<span>#${a.id}</span><span>${esc(a.actor)}</span><span>${esc(a.action)}</span>
+     <span class="chip">${esc(a.verdict)}</span><span>${time(a.created_at)}</span>`,
+    esc(a.detail || a.target || "")
+  )).join("");
+}
+
+const loaders = { messages: loadMessages, memories: loadMemories, tasks: loadTasks, audit: loadAudit };
+
+async function load() {
+  await loadStatus();
+  try {
+    $("list").innerHTML = await loaders[state.tab]();
+    document.querySelectorAll("[data-revoke]").forEach((btn) => {
+      btn.onclick = async () => {
+        if (!confirm("撤销后这条记忆不再参与对话，确定？")) return;
+        try {
+          await api(`/api/memories/${btn.dataset.revoke}/revoke`, { method: "POST" });
+          load();
+        } catch (e) { alert(`撤销失败：${e.message}`); }
+      };
+    });
+  } catch (e) {
+    $("list").innerHTML = `<div class="err">加载失败：${esc(e.message)}</div>`;
+  }
+}
+
+load();
+setInterval(loadStatus, 15000);
+</script>
+</body>
+</html>

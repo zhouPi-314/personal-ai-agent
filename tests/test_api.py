@@ -46,3 +46,12 @@ def test_revoke_unknown_memory_returns_404():
         response = client.post(f"/api/memories/{uuid.uuid4()}/revoke")
 
     assert response.status_code == 404
+
+
+def test_ui_page_is_served():
+    with _client() as client:
+        response = client.get("/")
+
+    assert response.status_code == 200
+    assert "PAA 维护台" in response.text
+    assert "/api/status" in response.text
