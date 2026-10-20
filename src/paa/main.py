@@ -1,13 +1,84 @@
-"""HTTP 入口。当前只有健康检查，业务模块按 ROADMAP 逐步接入。"""
+"""HTTP 入口与常驻服务生命周期。
 
-from fastapi import FastAPI
+启动时做三件事：连数据库、回收上次遗留的 running 任务、探测主通道。
+任何一件失败都不阻止进程启动——服务要能起来，/healthz 才说得清哪里坏了。
+"""
+
+from __future__ import annotations
+
+import socket
+from contextlib import asynccontextmanager
+from urllib.parse import urlparse
+
+from fastapi import FastAPI, Response
+from sqlalchemy import text
 
 from . import __version__
 from .config import get_settings
+from .db import get_engine, session_scope
+from .logging import configure
+from .tasks.engine import TaskEngine
 
-app = FastAPI(title="PAA", version=__version__)
+
+def _probe(url: str, timeout: float = 1.0) -> bool:
+    parsed = urlparse(url)
+    if not parsed.hostname:
+        return False
+    port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    try:
+        with socket.create_connection((parsed.hostname, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
 
 
-@app.get("/healthz")
-def healthz() -> dict[str, str]:
-    return {"status": "ok", "version": __version__, "env": get_settings().env}
+def create_app(router=None) -> FastAPI:
+    state: dict[str, object] = {"db_ok": False, "primary_ok": None, "recovered": 0}
+
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI):
+        settings = get_settings()
+        logger = configure(settings.log_level)
+        logger.info("服务启动", extra={"fields": {"version": __version__, "env": settings.env}})
+
+        try:
+            with get_engine().connect() as connection:
+                connection.execute(text("select 1"))
+            state["db_ok"] = True
+            with session_scope() as db:
+                state["recovered"] = TaskEngine(db).recover_interrupted()
+        except Exception as exc:  # noqa: BLE001 - 启动失败要记录而不是崩溃
+            logger.error("数据库不可用", extra={"fields": {"error": str(exc)}})
+
+        if settings.local_base_url:
+            reachable = _probe(settings.local_base_url)
+            state["primary_ok"] = reachable
+            if not reachable and router is not None:
+                router.demote()
+            logger.info("主通道探测", extra={"fields": {"reachable": reachable}})
+
+        yield
+        logger.info("服务关闭")
+
+    app = FastAPI(title="PAA", version=__version__, lifespan=lifespan)
+    app.state.health = state
+    app.state.router = router
+
+    @app.get("/healthz")
+    def healthz(response: Response) -> dict[str, object]:
+        healthy = bool(state["db_ok"])
+        if not healthy:
+            response.status_code = 503
+        return {
+            "status": "ok" if healthy else "degraded",
+            "version": __version__,
+            "env": get_settings().env,
+            "db": state["db_ok"],
+            "primary_reachable": state["primary_ok"],
+            "recovered_tasks": state["recovered"],
+        }
+
+    return app
+
+
+app = create_app()

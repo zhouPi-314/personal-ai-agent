@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     env: str = "dev"
     host: str = "127.0.0.1"
     port: int = 8000
+    log_level: str = "INFO"
 
     # 留空表示尚未配置；业务代码必须显式检查后再使用。
     database_url: str = ""

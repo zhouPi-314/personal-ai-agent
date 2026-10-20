@@ -84,4 +84,5 @@ docs/            设计与运维文档
 | `paa.audit` | 只追加的审计记录 | `models` | 所有需要留痕的调用方 |
 | `paa.tasks.approval` | L3 一次性授权 | `models` | 执行器 |
 | `paa.tasks.executor` | 策略 → 审批 → 执行 → 审计的编排 | 全部任务模块 | 入口层 |
-| `paa.main` | HTTP 入口 | `config` | — |
+| `paa.main` | HTTP 入口与生命周期（启动预检、任务恢复） | `config`、`db`、`tasks` | uvicorn |
+| `paa.serve` | 常驻服务入口 | `main` | 运维脚本 |
