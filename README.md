@@ -48,6 +48,18 @@ python -m venv .venv
 开机自启：把指向它的 `.vbs` 放进 `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup`，
 这样登录后不弹窗口直接运行。停掉服务 = 结束 `run_paa.ps1` 的 powershell 进程。
 
+看门狗 `scripts/watchdog.ps1` 每分钟检查三件事，缺哪个补哪个：PAA 服务、NapCat、本机 DSH。
+
+电源要求（否则息屏后会掉线）：
+
+```powershell
+powercfg /change standby-timeout-ac 0     # 插电时永不待机
+powercfg /change hibernate-timeout-ac 0
+powercfg /change monitor-timeout-ac 10    # 屏幕 10 分钟熄灭，系统保持运行
+```
+
+锁屏（Win+L）不影响进程；**待机/休眠会挂起进程**，NapCat 与 PAA 都会掉线。
+
 ## 备份
 
 ```powershell
