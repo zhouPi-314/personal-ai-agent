@@ -64,12 +64,13 @@ powercfg /change monitor-timeout-ac 10    # 屏幕 10 分钟熄灭，系统保�
 
 ```powershell
 pwsh -File scripts/backup.ps1            # 本地备份（保留 7 份，自动校验归档）
-pwsh -File scripts/backup.ps1 -Upload    # 额外加密上传到 ECS（远端保留 8 份）
+pwsh -File scripts/backup.ps1 -Upload    # 云上传已停用，仅打印提示
 ```
 
 - 本地文件落在 `backups/`（已 gitignore）
 - 加密口令读取 `%USERPROFILE%\.paa\backup.key`，**不要**与数据库密码相同，也不要提交到仓库
 - 备份文件用 `pg_restore --list` 校验结构；真正的恢复演练记录在 `STATUS.md`
+- 云服务器已取消：上传代码保留在 `backup.ps1` 的注释块中，恢复时去掉 `#` 即可
 
 ## 工具
 

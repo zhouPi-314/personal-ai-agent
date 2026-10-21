@@ -43,29 +43,35 @@ Get-ChildItem $backupDir -Filter "$dbName-*.dump" |
 
 if (-not $Upload) { return }
 
-$keyFile = Join-Path $env:USERPROFILE '.paa\backup.key'
-if (-not (Test-Path $keyFile)) {
-    throw "缺少加密口令文件：$keyFile（先创建，内容自己定，不要和数据库密码相同）"
-}
+# ============================================================
+# 云服务器上传（已停用，代码保留）
+# 恢复方法：删掉下面每一行开头的 「# 」，并重新配置 .env 的 PAA_BACKUP_REMOTE
+# ============================================================
+Write-Output '云服务器上传已停用（本地备份已完成）。需要恢复时，取消 backup.ps1 中注释即可。'
 
-$gpg = 'D:\Git\usr\bin\gpg.exe'
-$encrypted = "$dump.gpg"
-& $gpg --batch --yes --passphrase-file $keyFile --symmetric `
-    --cipher-algo AES256 --output $encrypted $dump
-if ($LASTEXITCODE -ne 0) { throw 'gpg 加密失败' }
-
-$remoteLine = Select-String -LiteralPath (Join-Path $root '.env') -Pattern '^PAA_BACKUP_REMOTE=' |
-    Select-Object -First 1
-if (-not $remoteLine) { throw '未配置 PAA_BACKUP_REMOTE（形如 user@host）' }
-$remote = $remoteLine.Line.Substring('PAA_BACKUP_REMOTE='.Length).Trim()
-& ssh $remote 'mkdir -p ~/paa-backups'
-if ($LASTEXITCODE -ne 0) { throw '无法连接 ECS' }
-& scp $encrypted "${remote}:~/paa-backups/"
-if ($LASTEXITCODE -ne 0) { throw 'scp 上传失败' }
-
-# 远端只保留最近 N 份加密包
-$remoteClean = "ls -1t ~/paa-backups/*.dump.gpg 2>/dev/null | tail -n +$($KeepRemote + 1) | xargs -r rm -f"
-& ssh $remote $remoteClean
-
-Remove-Item -LiteralPath $encrypted -Force
-Write-Output "已上传：$([IO.Path]::GetFileName($encrypted))"
+# $keyFile = Join-Path $env:USERPROFILE '.paa\backup.key'
+# if (-not (Test-Path $keyFile)) {
+#     throw "缺少加密口令文件：$keyFile（先创建，内容自己定，不要和数据库密码相同）"
+# }
+#
+# $gpg = 'D:\Git\usr\bin\gpg.exe'
+# $encrypted = "$dump.gpg"
+# & $gpg --batch --yes --passphrase-file $keyFile --symmetric `
+#     --cipher-algo AES256 --output $encrypted $dump
+# if ($LASTEXITCODE -ne 0) { throw 'gpg 加密失败' }
+#
+# $remoteLine = Select-String -LiteralPath (Join-Path $root '.env') -Pattern '^PAA_BACKUP_REMOTE=' |
+#     Select-Object -First 1
+# if (-not $remoteLine) { throw '未配置 PAA_BACKUP_REMOTE（形如 user@host）' }
+# $remote = $remoteLine.Line.Substring('PAA_BACKUP_REMOTE='.Length).Trim()
+# & ssh $remote 'mkdir -p ~/paa-backups'
+# if ($LASTEXITCODE -ne 0) { throw '无法连接 ECS' }
+# & scp $encrypted "${remote}:~/paa-backups/"
+# if ($LASTEXITCODE -ne 0) { throw 'scp 上传失败' }
+#
+# # 远端只保留最近 N 份加密包
+# $remoteClean = "ls -1t ~/paa-backups/*.dump.gpg 2>/dev/null | tail -n +$($KeepRemote + 1) | xargs -r rm -f"
+# & ssh $remote $remoteClean
+#
+# Remove-Item -LiteralPath $encrypted -Force
+# Write-Output "已上传：$([IO.Path]::GetFileName($encrypted))"

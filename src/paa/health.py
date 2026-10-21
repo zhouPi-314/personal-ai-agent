@@ -92,13 +92,14 @@ def _check_dsh(settings: Settings) -> dict:
     return _item("dsh", "本机 DSH", ok, latency, "" if ok else "端口不可达")
 
 
-def _check_cloud(settings: Settings) -> dict:
-    remote = (settings.backup_remote or "").strip()
-    if not remote:
-        return _item("cloud", "云服务器", None, detail="未配置")
-    host = remote.split("@")[-1]
-    ok, latency = _tcp(host, 22)
-    return _item("cloud", "云服务器", ok, latency, "SSH 22" if ok else "端口不可达")
+# 云服务器检查（已停用，代码保留）：恢复时去掉每行开头的「# 」
+# def _check_cloud(settings: Settings) -> dict:
+#     remote = (settings.backup_remote or "").strip()
+#     if not remote:
+#         return _item("cloud", "云服务器", None, detail="未配置")
+#     host = remote.split("@")[-1]
+#     ok, latency = _tcp(host, 22)
+#     return _item("cloud", "云服务器", ok, latency, "SSH 22" if ok else "端口不可达")
 
 
 def check_all(settings: Settings) -> dict:
@@ -108,7 +109,7 @@ def check_all(settings: Settings) -> dict:
         _check_napcat(settings),
         _check_qq(settings),
         _check_dsh(settings),
-        _check_cloud(settings),
+        # _check_cloud(settings),  # 云服务器已取消
     ]
     problem = any(item["ok"] is False for item in items)
     return {"status": "degraded" if problem else "ok", "items": items}

@@ -47,7 +47,7 @@ class Settings(BaseSettings):
     onebot_access_token: str = ""
     onebot_self_id: str = ""
     owner_qq: str = ""
-    backup_remote: str = ""
+    # backup_remote: str = ""  # 云服务器已取消
 
 
 @lru_cache
