@@ -105,11 +105,18 @@ def create_app(router=None) -> FastAPI:
 
     @app.get("/", include_in_schema=False)
     def ui() -> FileResponse:
-        return FileResponse(PROJECT_ROOT / "static" / "index.html")
+        # 维护台会随代码更新，禁止浏览器缓存旧页面
+        return FileResponse(
+            PROJECT_ROOT / "static" / "index.html",
+            headers={"Cache-Control": "no-store, must-revalidate"},
+        )
 
     @app.get("/ui", include_in_schema=False)
     def ui_alias() -> FileResponse:
-        return FileResponse(PROJECT_ROOT / "static" / "index.html")
+        return FileResponse(
+            PROJECT_ROOT / "static" / "index.html",
+            headers={"Cache-Control": "no-store, must-revalidate"},
+        )
     app.include_router(api_router)
 
     @app.get("/healthz")
