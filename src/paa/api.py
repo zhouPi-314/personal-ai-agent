@@ -12,6 +12,7 @@ from sqlalchemy import func, select
 
 from .config import get_settings
 from .db import session_scope
+from .health import check_all
 from .memory import MemoryService
 from .models import AuditLog, Memory, Message, Task
 from .usage import UsageService
@@ -142,3 +143,8 @@ def usage(days: int = Query(default=7, ge=1, le=90)) -> dict:
             "remaining": service.remaining(get_settings().daily_token_quota),
             "series": service.daily_series(days),
         }
+
+
+@router.get("/health", dependencies=[Depends(require_token)])
+def health_detail() -> dict:
+    return check_all(get_settings())

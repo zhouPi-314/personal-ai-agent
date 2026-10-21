@@ -47,6 +47,7 @@ class Settings(BaseSettings):
     onebot_access_token: str = ""
     onebot_self_id: str = ""
     owner_qq: str = ""
+    backup_remote: str = ""
 
 
 @lru_cache
