@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from .config import get_settings
 from .models import TokenUsage
 from .pricing import cost_of
 
@@ -39,17 +41,21 @@ class UsageService:
         self.session.flush()
 
     def today_total(self) -> int:
-        start = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+        tz = ZoneInfo(get_settings().timezone)
+        start = datetime.now(tz).replace(hour=0, minute=0, second=0, microsecond=0).astimezone(UTC)
         stmt = select(
             func.coalesce(func.sum(TokenUsage.input_tokens + TokenUsage.output_tokens), 0)
         ).where(TokenUsage.created_at >= start)
         return int(self.session.scalar(stmt) or 0)
 
     def daily_series(self, days: int = 7) -> list[dict]:
-        since = datetime.now(UTC) - timedelta(days=days)
+        tz_name = get_settings().timezone
+        tz = ZoneInfo(tz_name)
+        since = (datetime.now(tz) - timedelta(days=days)).astimezone(UTC)
+        local_day = func.date(func.timezone(tz_name, TokenUsage.created_at)).label("day")
         stmt = (
             select(
-                func.date(TokenUsage.created_at).label("day"),
+                local_day,
                 TokenUsage.model,
                 func.coalesce(func.sum(TokenUsage.input_tokens), 0).label("input"),
                 func.coalesce(func.sum(TokenUsage.output_tokens), 0).label("output"),

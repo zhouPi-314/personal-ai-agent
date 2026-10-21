@@ -39,6 +39,7 @@ class Settings(BaseSettings):
     ui_token: str = ""
     pricing_path: str = "pricing.json"
     daily_token_quota: int = 0  # 0 = 不限制
+    timezone: str = "Asia/Shanghai"
 
     # OneBot（可选）
     onebot_ws_url: str = ""
