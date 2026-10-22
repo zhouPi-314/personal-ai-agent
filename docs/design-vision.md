@@ -1,7 +1,7 @@
 # DSH Companion（DSHC）项目设计构想
 
 > **归档说明（2026-10-19）**：本文原属编号 03 项目，现集中存放于
-> `D:\项目设计\Personal AI Agent（PAA）`；PAA 为该项目的旧代号。
+> `<项目根>`；PAA 为该项目的旧代号。
 
 > 中文名称：DSH 灵犀  
 > 英文全称：DeepSeek Harness Companion  

@@ -4,7 +4,7 @@
 
 > **归档说明（2026-10-19）**：本报告是 2026-10-18 的审计快照，其中的 `D:\AI-Assistant`
 > 指当时计划但从未创建的项目根目录。全部 PAA 资料现存放于
-> `D:\项目设计\Personal AI Agent（PAA）`；项目正式名称已改为 DSH Companion（DSHC）。
+> `<项目根>`；项目正式名称已改为 DSH Companion（DSHC）。
 
 ## 0. 结论先行
 
@@ -19,7 +19,7 @@
 | 项 | 实测结果 | 备注 |
 |---|---|---|
 | 操作系统 | Windows 11 家庭版 10.0.26200，64 位 | 家庭版无 Hyper-V 管理功能，Docker 需走 WSL2 |
-| 硬件 | Ryzen 7 8845H，8 核 16 线程，15.3 GB 内存 | 够本地开发，跑本地大模型不够 |
+| 硬件 | 8 核 / 16 GB 内存 | 够本地开发，跑本地大模型不够 |
 | 磁盘 | C: 剩 53.9 GB，D: 剩 124.0 GB | 项目放 D 盘没问题 |
 | PowerShell | 7.6.5 | |
 | Python | Anaconda base 3.14.6（PATH 首位）；py 启动器另有 3.13（`D:\Python\python`） | 已有 conda 环境：base / pt-dqn / pt-dqn-api（不动） |
@@ -32,7 +32,7 @@
 | Codex | codex-cli 0.162.0-alpha.17.2 | alpha 版本，接口可能变 |
 | Playwright | 未安装（Python 与 Node 都没有） | 装浏览器内核约 +1 GB |
 | Tailscale | 未安装 | 远程访问方案待定 |
-| 项目目录 | `D:\AI-Assistant`（当时计划）不存在 | 尚未创建；现资料位于 `D:\项目设计\Personal AI Agent（PAA）` |
+| 项目目录 | `D:\AI-Assistant`（当时计划）不存在 | 尚未创建；现资料位于 `<项目根>` |
 
 ## 2. DeepSeek Harness 兼容性
 
@@ -102,7 +102,7 @@ QQ Adapter (Phase 3) ───┤
 ### 3.3 目录建议（第二阶段再创建）
 
 ```
-D:\项目设计\Personal AI Agent（PAA）\
+<项目根>\
   apps/api/            FastAPI 应用（按模块分包，不拆服务）
   apps/web/            Vue 3 + TS
   paa/adapters/harness Harness 子进程适配器（唯一 DSH 依赖）
@@ -150,16 +150,16 @@ D:\项目设计\Personal AI Agent（PAA）\
 ## 6. 资源需求
 
 - **本地磁盘**：代码 + venv + node_modules ≈ 1.5 GB；Playwright 内核 ≈ 1 GB；合计留 5 GB 足够（D 盘现有 124 GB）。
-- **本地内存**：开发期常驻 < 3 GB，15.3 GB 充裕。
+- **本地内存**：开发期常驻 < 3 GB，16 GB 充裕。
 - **云服务器（第四阶段）**：2 vCPU / 4 GB / 40 GB 起步即可（阿里云 Ubuntu 24.04），按量或包月约 ¥80–150/月。
 - **域名与备案**：若走大陆公网域名需 ICP 备案；若只用 Tailscale 内网访问，可完全跳过。
 - **模型费用**：以官方 API 为主；实测 headless 单任务基线 ~6k 输入 token，任务型调用要按「每任务 1–3 万 token」估算预算。
 
 ## 7. 需要你确认的操作（未执行）
 
-1. 在 `D:\项目设计\Personal AI Agent（PAA）` 创建骨架与文档（当前仅有审计与设计资料）。
+1. 在 `<项目根>` 创建骨架与文档（当前仅有审计与设计资料）。
 2. 建独立 conda 环境（建议 Python 3.13，命如 `paa`），装 FastAPI / SQLAlchemy / Alembic / pytest / ruff。
-3. 为 PAA 建**独立的** DSH home（如 `D:\项目设计\Personal AI Agent（PAA）\runtime\dsh-home`）与专用 profile，与桌面端和 `ofmtest` 隔离。
+3. 为 PAA 建**独立的** DSH home（如 `<项目根>\runtime\dsh-home`）与专用 profile，与桌面端和 `ofmtest` 隔离。
 4. 是否引入官方 DeepSeek API Key（你自己在 Security Center 里填，不经过对话）。
 5. 是否安装 Docker Desktop + WSL2（需重启；第四阶段前可不装）。
 6. Playwright 与 Tailscale 何时装（第三、四阶段）。
