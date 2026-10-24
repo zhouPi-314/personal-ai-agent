@@ -160,7 +160,7 @@ def test_provider_passes_wav_straight_through(tmp_path: Path, monkeypatch):
     item = MediaInput(MediaRef("audio", "file", str(wav)), wav, "audio/wav", len(WAV), "h")
 
     monkeypatch.setattr(
-        "paa.media.providers.asr_sidecar.call_worker",
+        "paa.media.providers.asr_sidecar.call_persistent",
         lambda **kwargs: {"status": "ok", "text": "今天天气不错", "audio_sec": 3.2},
     )
     result = provider.recognize_audio(item)
@@ -184,7 +184,7 @@ def test_provider_transcodes_amr(tmp_path: Path, monkeypatch):
 
     monkeypatch.setattr("paa.media.providers.asr_sidecar.to_wav16k", fake_transcode)
     monkeypatch.setattr(
-        "paa.media.providers.asr_sidecar.call_worker",
+        "paa.media.providers.asr_sidecar.call_persistent",
         lambda **kwargs: {"status": "ok", "text": "喂", "audio_sec": 1.0},
     )
     result = provider.recognize_audio(item)
@@ -199,7 +199,7 @@ def test_provider_empty_transcript_is_degraded(tmp_path: Path, monkeypatch):
     item = MediaInput(MediaRef("audio", "file", str(wav)), wav, "audio/wav", len(WAV), "h")
 
     monkeypatch.setattr(
-        "paa.media.providers.asr_sidecar.call_worker",
+        "paa.media.providers.asr_sidecar.call_persistent",
         lambda **kwargs: {"status": "ok", "text": "  "},
     )
     result = provider.recognize_audio(item)

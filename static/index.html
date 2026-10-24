@@ -64,6 +64,7 @@
     <button data-tab="memories">记忆</button>
     <button data-tab="tasks">任务</button>
     <button data-tab="audit">审计</button>
+    <button data-tab="tts">语音</button>
   </nav>
   <section id="list"><div class="empty">加载中…</div></section>
 </main>
@@ -193,13 +194,75 @@ async function loadAudit() {
   )).join("");
 }
 
-const loaders = { messages: loadMessages, memories: loadMemories, tasks: loadTasks, audit: loadAudit };
+async function loadTts() {
+  const d = await api("/api/media/tts");
+  const options = (d.voices || []).map((v) =>
+    `<option value="${esc(v)}"${v === d.voice ? " selected" : ""}>${esc(v)}</option>`
+  ).join("");
+  return `<div class="card" style="max-width:560px">
+    <div style="margin-bottom:10px"><b>语音合成</b>
+      <span class="chip">${esc(d.provider)}</span>
+      <span class="chip">${d.enabled ? "已启用" : "未启用"}</span>
+      <span class="chip">${esc(d.mode)}</span></div>
+    <label style="display:block;margin:10px 0">音色
+      <select id="tts-voice">${options || '<option value="">（无可用音色）</option>'}</select></label>
+    <label style="display:block;margin:10px 0">语速
+      <input id="tts-speed" type="range" min="${d.speed_range[0]}" max="${d.speed_range[1]}"
+             step="0.05" value="${d.speed}">
+      <span id="tts-speed-val">${d.speed.toFixed(2)}</span></label>
+    <button id="tts-preview">试听</button>
+    <button id="tts-save">保存</button>
+    <div id="tts-status" style="margin-top:10px;color:#9aa4b2"></div>
+    <audio id="tts-audio" controls style="width:100%;margin-top:12px;display:none"></audio>
+    <div style="margin-top:14px;color:#9aa4b2;font-size:12px">
+      语速 &lt;1 更慢更稳，&gt;1 更快。改完点保存，之后 QQ 语音回复会立刻用它。
+    </div>
+  </div>`;
+}
+
+function bindTts() {
+  const slider = $("tts-speed");
+  if (!slider) return;
+  slider.oninput = () => { $("tts-speed-val").textContent = Number(slider.value).toFixed(2); };
+  $("tts-preview").onclick = async () => {
+    $("tts-status").textContent = "合成中…（首次约 5 秒，之后约 1 秒）";
+    try {
+      const res = await fetch("/api/media/tts/preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(state.token ? { "X-PAA-Token": state.token } : {}) },
+        body: JSON.stringify({ voice: $("tts-voice").value, speed: Number(slider.value) }),
+      });
+      if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
+      const blob = await res.blob();
+      const audio = $("tts-audio");
+      audio.src = URL.createObjectURL(blob);
+      audio.style.display = "block";
+      audio.play();
+      $("tts-status").textContent = "合成完成，可以直接播放。";
+    } catch (e) { $("tts-status").textContent = `试听失败：${e.message}`; }
+  };
+  $("tts-save").onclick = async () => {
+    try {
+      await api("/api/media/tts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ voice: $("tts-voice").value, speed: Number(slider.value) }),
+      });
+      $("tts-status").textContent = "已保存。";
+    } catch (e) { $("tts-status").textContent = `保存失败：${e.message}`; }
+  };
+}
+
+const loaders = {
+  messages: loadMessages, memories: loadMemories, tasks: loadTasks, audit: loadAudit, tts: loadTts,
+};
 
 async function load() {
   await loadHealth();
   await loadStatus();
   try {
     $("list").innerHTML = await loaders[state.tab]();
+    if (state.tab === "tts") bindTts();
     document.querySelectorAll("[data-revoke]").forEach((btn) => {
       btn.onclick = async () => {
         if (!confirm("撤销后这条记忆不再参与对话，确定？")) return;

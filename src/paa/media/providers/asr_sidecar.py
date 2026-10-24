@@ -10,7 +10,7 @@ from pathlib import Path
 
 from ..audio import AudioError, to_wav16k
 from ..contracts import Capability, MediaInput, MediaResult, ResultStatus
-from ..worker_client import WorkerError, call_worker
+from ..worker_client import WorkerError, call_persistent
 
 WAV_MIMES = frozenset({"audio/wav", "audio/x-wav", "audio/wave"})
 
@@ -83,7 +83,7 @@ class ASRSidecarProvider:
                 )
 
             try:
-                data = call_worker(
+                data = call_persistent(
                     python_exe=self.python_exe,
                     script=self.worker_script,
                     payload={

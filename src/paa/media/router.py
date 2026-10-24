@@ -111,7 +111,13 @@ class MediaRouter:
 
     # ── 语音合成（M3，本地执行、不出网）────────────────────────
     def synthesize_speech(
-        self, text: str, *, chat_key: str, actor: str = ""
+        self,
+        text: str,
+        *,
+        chat_key: str,
+        actor: str = "",
+        voice: str = "",
+        speed: float | None = None,
     ) -> MediaResult:
         if not self.settings.enabled or not self.settings.tts_enabled:
             return _denied(Capability.SYNTHESIZE_SPEECH, "tts_disabled")
@@ -130,7 +136,12 @@ class MediaRouter:
 
         result: MediaResult
         try:
-            result = self.tts.synthesize_speech(text, out_dir=self.tmp_dir)
+            kwargs: dict[str, object] = {"out_dir": self.tmp_dir}
+            if voice:
+                kwargs["voice_id"] = voice
+            if speed is not None:
+                kwargs["speed"] = speed
+            result = self.tts.synthesize_speech(text, **kwargs)  # type: ignore[arg-type]
         except Exception as exc:  # noqa: BLE001 - 合成失败要退回文字
             self._emit(actor=actor or chat_key, verdict="failed", detail=str(exc)[:120])
             return MediaResult(

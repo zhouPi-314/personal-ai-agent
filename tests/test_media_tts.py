@@ -232,7 +232,7 @@ def test_kokoro_success_returns_wav(tmp_path: Path, monkeypatch):
         Path(payload["out_wav"]).write_bytes(BIG_WAV)
         return {"status": "ok", "seconds": 1.5, "tts_ms": 120}
 
-    monkeypatch.setattr(tts_kokoro, "call_worker", fake_worker)
+    monkeypatch.setattr(tts_kokoro, "call_persistent", fake_worker)
     result = provider.synthesize_speech("你好", out_dir=out_dir)
 
     assert result.status is ResultStatus.OK
@@ -246,7 +246,7 @@ def test_kokoro_worker_error_is_failed(tmp_path: Path, monkeypatch):
     def boom(**kwargs):
         raise tts_kokoro.WorkerError("E_WORKER", "bad")
 
-    monkeypatch.setattr(tts_kokoro, "call_worker", boom)
+    monkeypatch.setattr(tts_kokoro, "call_persistent", boom)
     result = provider.synthesize_speech("你好", out_dir=tmp_path / "o")
     assert result.status is ResultStatus.FAILED
     assert result.error_code == "E_WORKER"
@@ -262,7 +262,7 @@ def test_kokoro_truncates(tmp_path: Path, monkeypatch):
         Path(payload["out_wav"]).write_bytes(BIG_WAV)
         return {"status": "ok", "seconds": 0.5}
 
-    monkeypatch.setattr(tts_kokoro, "call_worker", fake_worker)
+    monkeypatch.setattr(tts_kokoro, "call_persistent", fake_worker)
     result = provider.synthesize_speech("一二三四五", out_dir=tmp_path / "o")
     assert captured["text"] == "一二三"
     assert result.data["truncated"] is True

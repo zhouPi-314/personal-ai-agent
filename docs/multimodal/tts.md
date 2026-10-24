@@ -74,3 +74,32 @@
 1. `misaki` 的 `zh` 模块要用 `version="1.1"`（注音），默认版本输出 IPA，与模型词表对不上（丢 24% 音素，念出来是乱的）。
 2. `pip install "misaki[zh]"` 会解析到 0.3.0 并拖进 **torch + spacy**（950MB）；显式装 `misaki[zh]==0.9.4` 后只有 368MB。
 3. `tokenizer.json` 用 `tokenizers` 库加载会报错，直接读 JSON 的 `model.vocab` 更稳。
+## 8. 语音控制面板（2026-10-24）
+
+维护台新增「语音」页签（`http://127.0.0.1:8000/` → 语音）：
+
+| 控件 | 作用 |
+|---|---|
+| 音色下拉 | 列出 models/kokoro 下所有 .bin（当前 zf_001 / zf_002） |
+| 语速滑杆 | 0.50 – 1.50；<1 更慢更稳，>1 更快 |
+| 试听 | 服务端合成一段，直接返回 audio/wav，浏览器内播放 |
+| 保存 | 写入 data/media/tts.json，QQ 语音回复立刻生效 |
+
+接口：@@GET /api/media/tts@@、@@POST /api/media/tts@@、@@POST /api/media/tts/preview@@（都需要 X-PAA-Token）。
+偏好存 @@data/media/tts.json@@（不进 Git），不放 .env —— .env 只放"能不能用"这类部署期开关。
+
+## 9. 常驻 worker（2026-10-24）
+
+ASR / TTS 侧车改成**常驻进程**：模型只加载一次，空闲 10 分钟自动退出。
+
+| 场景 | 端到端耗时 |
+|---|---|
+| 冷启动第一句 | 5.6 s |
+| 之后每句 | **1.0 s**（合成本身 ~1.0 s） |
+
+踩坑：@@misaki@@ 初始化会往 **stdout** 打一行警告（@@Warning: en_callable is None@@），把 JSON 行协议打乱，
+客户端收到非 JSON 就判定失败并重启进程 —— 于是每次都在冷启动。修了三处：
+
+1. worker 内用 @@contextlib.redirect_stdout(sys.stderr)@@ 包住 G2P 初始化；
+2. 客户端解析改为"从后往前找带 status 的 JSON 行"，忽略噪音；
+3. 常驻读取线程只把 @@{@@ 开头的行放进队列。

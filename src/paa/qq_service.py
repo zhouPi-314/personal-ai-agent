@@ -23,16 +23,16 @@ from .config import PROJECT_ROOT, Settings
 from .db import session_scope
 from .llm import BrainRouter
 from .logging import get_logger
+from .media import tts_settings
 from .media.context import format_image_block
 from .media.contracts import ResultStatus
 from .media.fetcher import fetch
 from .media.providers.asr_sidecar import ASRSidecarProvider
-from .media.providers.tts_kokoro import KokoroTTSProvider
-from .media.providers.tts_sapi import SapiTTSProvider
 from .media.providers.vision_openai import OpenAIVisionProvider
 from .media.quarantine import Quarantine
 from .media.router import MediaRouter, MediaSettings
 from .media.stickers import StickerLibrary
+from .media.tts_factory import build_tts
 from .memory import MemoryService
 from .models import User
 from .persona import PersonaCard
@@ -73,6 +73,7 @@ class QqService:
             owner_ids=frozenset({settings.owner_qq}) if settings.owner_qq else frozenset(),
         )
         self._media_tmp = PROJECT_ROOT / "data" / "media" / "tmp"
+        self._tts_prefs_path = PROJECT_ROOT / "data" / "media" / "tts.json"
         self.media = MediaRouter(
             settings=MediaSettings(
                 enabled=settings.media_enabled,
@@ -118,7 +119,7 @@ class QqService:
                 if settings.media_asr_enabled
                 else None
             ),
-            tts=(self._build_tts(settings) if settings.media_tts_enabled else None),
+            tts=(build_tts(settings, PROJECT_ROOT) if settings.media_tts_enabled else None),
         )
         self.quarantine = Quarantine(
             PROJECT_ROOT / settings.media_quarantine_dir,
@@ -225,11 +226,14 @@ class QqService:
             result.reply, hour=hour, rng=random.Random(), media=media
         )
         if self._should_speak(message):
+            prefs = tts_settings.load(self._tts_prefs_path)
             voice = await asyncio.to_thread(
                 self.media.synthesize_speech,
                 result.reply,
                 chat_key=message.chat_key,
                 actor=f"qq:{message.sender_id}",
+                voice=prefs.voice,
+                speed=prefs.speed,
             )
             if voice.status is ResultStatus.OK:
                 # 合成成功就用语音代替文字；失败则保留原有文字计划
@@ -264,26 +268,6 @@ class QqService:
             },
         )
         return parts
-
-    @staticmethod
-    def _build_tts(settings: Settings):
-        """按配置选合成引擎；Kokoro 不可用时自动退回 SAPI。"""
-        sapi = SapiTTSProvider(
-            script=PROJECT_ROOT / "scripts" / "tts_sapi.ps1",
-            voice=settings.media_tts_voice,
-            max_chars=settings.media_tts_max_chars,
-        )
-        if (settings.media_tts_provider or "kokoro").strip().lower() == "sapi":
-            return sapi
-        kokoro = KokoroTTSProvider(
-            python_exe=PROJECT_ROOT / settings.media_asr_python,
-            worker_script=PROJECT_ROOT / settings.media_tts_kokoro_worker,
-            model_dir=PROJECT_ROOT / settings.media_tts_kokoro_dir,
-            voice=settings.media_tts_kokoro_voice,
-            model_file=settings.media_tts_kokoro_model,
-            max_chars=settings.media_tts_max_chars,
-        )
-        return kokoro if kokoro.available() else sapi
 
     def _should_speak(self, message: InboundMessage) -> bool:
         if not self.settings.media_tts_enabled:

@@ -7,17 +7,22 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
 from sqlalchemy import func, select
 
-from .config import get_settings
+from .config import PROJECT_ROOT, get_settings
 from .db import session_scope
 from .health import check_all
+from .media import tts_settings
+from .media.tts_factory import build_tts
 from .memory import MemoryService
 from .models import AuditLog, Memory, Message, Task
 from .usage import UsageService
 
 router = APIRouter(prefix="/api")
+
+TTS_PREFS_PATH = PROJECT_ROOT / "data" / "media" / "tts.json"
+PREVIEW_TEXT = "你好，我是你的助手。这样说话听起来自然吗？"
 
 
 def require_token(x_paa_token: str | None = Header(default=None)) -> None:
@@ -148,3 +153,71 @@ def usage(days: int = Query(default=7, ge=1, le=90)) -> dict:
 @router.get("/health", dependencies=[Depends(require_token)])
 def health_detail() -> dict:
     return check_all(get_settings())
+
+
+# ── 语音偏好（M3）────────────────────────────────────────────
+@router.get("/media/tts", dependencies=[Depends(require_token)])
+def get_tts_prefs() -> dict:
+    settings = get_settings()
+    model_dir = PROJECT_ROOT / settings.media_tts_kokoro_dir
+    prefs = tts_settings.load(TTS_PREFS_PATH)
+    return {
+        "enabled": settings.media_tts_enabled,
+        "mode": settings.media_tts_mode,
+        "provider": settings.media_tts_provider,
+        "voice": prefs.voice,
+        "speed": prefs.speed,
+        "voices": tts_settings.list_voices(model_dir),
+        "max_chars": settings.media_tts_max_chars,
+        "speed_range": [tts_settings.MIN_SPEED, tts_settings.MAX_SPEED],
+    }
+
+
+@router.post("/media/tts", dependencies=[Depends(require_token)])
+def set_tts_prefs(payload: dict) -> dict:
+    settings = get_settings()
+    voices = tts_settings.list_voices(PROJECT_ROOT / settings.media_tts_kokoro_dir)
+    voice = str(payload.get("voice") or "").strip()
+    if voice and voices and voice not in voices:
+        raise HTTPException(status_code=400, detail="音色不存在")
+    try:
+        speed = float(payload.get("speed", tts_settings.DEFAULT_SPEED))
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail="语速必须是数字") from exc
+
+    saved = tts_settings.save(
+        TTS_PREFS_PATH,
+        tts_settings.TtsPrefs(voice=voice or tts_settings.DEFAULT_VOICE, speed=speed),
+    )
+    return {"voice": saved.voice, "speed": saved.speed}
+
+
+@router.post("/media/tts/preview", dependencies=[Depends(require_token)])
+def preview_tts(payload: dict | None = None) -> Response:
+    """按当前偏好合成一小段，直接返回 wav 给浏览器播放。"""
+    settings = get_settings()
+    if not settings.media_tts_enabled:
+        raise HTTPException(status_code=409, detail="语音合成未启用")
+
+    prefs = tts_settings.load(TTS_PREFS_PATH)
+    if payload and payload.get("voice"):
+        prefs = tts_settings.TtsPrefs(voice=str(payload["voice"]), speed=prefs.speed)
+    if payload and payload.get("speed") is not None:
+        prefs = tts_settings.TtsPrefs(voice=prefs.voice, speed=float(payload["speed"]))
+
+    provider = build_tts(settings, PROJECT_ROOT)
+    out_dir = PROJECT_ROOT / "data" / "media" / "tmp"
+    result = provider.synthesize_speech(
+        PREVIEW_TEXT,
+        out_dir=out_dir,
+        voice_id=prefs.voice,
+        max_chars=settings.media_tts_max_chars,
+        speed=prefs.speed,
+    )
+    if result.status.value != "ok":
+        raise HTTPException(status_code=503, detail=f"合成失败：{result.error_code or result.status.value}")
+
+    from pathlib import Path as _Path
+
+    data = _Path(str(result.data.get("path") or "")).read_bytes()
+    return Response(content=data, media_type="audio/wav")

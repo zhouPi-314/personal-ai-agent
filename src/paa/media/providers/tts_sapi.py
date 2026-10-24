@@ -46,6 +46,7 @@ class SapiTTSProvider:
         voice_id: str = "",
         max_chars: int | None = None,
         deadline_ms: int = 30_000,
+        speed: float | None = None,  # SAPI 用 Rate，这里忽略以保持接口一致
     ) -> MediaResult:
         if not self.available():
             return MediaResult(

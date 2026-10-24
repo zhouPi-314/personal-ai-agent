@@ -8,7 +8,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from ..contracts import Capability, MediaResult, ResultStatus
-from ..worker_client import WorkerError, call_worker
+from ..worker_client import WorkerError, call_persistent
 
 DEFAULT_MAX_CHARS = 120
 MIN_WAV_BYTES = 4096
@@ -57,6 +57,7 @@ class KokoroTTSProvider:
         voice_id: str = "",
         max_chars: int | None = None,
         deadline_ms: int = 180_000,
+        speed: float | None = None,
     ) -> MediaResult:
         if not self.available():
             return MediaResult(
@@ -83,7 +84,7 @@ class KokoroTTSProvider:
         timeout = max(20.0, min(self.timeout, deadline_ms / 1000))
 
         try:
-            data = call_worker(
+            data = call_persistent(
                 python_exe=self.python_exe,
                 script=self.worker_script,
                 payload={
@@ -91,7 +92,7 @@ class KokoroTTSProvider:
                     "model_dir": str(self.model_dir),
                     "out_wav": str(out_wav),
                     "voice": voice_id or self.voice,
-                    "speed": self.speed,
+                    "speed": float(speed if speed is not None else self.speed),
                     "model_file": self.model_file,
                     "threads": 8,
                 },
