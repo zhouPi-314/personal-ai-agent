@@ -6,10 +6,18 @@
 
 from __future__ import annotations
 
+import base64
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import httpx
+
+MAX_SEGMENTS = 5
+MAX_IMAGE_BYTES = 8 * 1024 * 1024
+
+# OneBot v11 转义规则；顺序不能变，& 必须最先替换。
+_CQ_ESCAPES = (("&", "&amp;"), ("[", "&#91;"), ("]", "&#93;"), (",", "&#44;"))
 
 
 @dataclass(frozen=True)
@@ -21,6 +29,28 @@ class InboundMessage:
     is_group: bool = False
     is_at_me: bool = False
     is_poke: bool = False
+
+
+def escape_cq(text: str) -> str:
+    """把文本转义成"不会被网关当成 CQ 码"的形式。
+
+    模型输出是不可信内容；不转义就等于让它可以构造 @全员、远程取图等指令。
+    """
+    out = str(text or "")
+    for raw, encoded in _CQ_ESCAPES:
+        out = out.replace(raw, encoded)
+    return out
+
+
+def image_segment(path: Path, *, max_bytes: int = MAX_IMAGE_BYTES) -> dict[str, Any]:
+    """把本地图片变成 base64 段：不把本机绝对路径交给网关。"""
+    data = Path(path).read_bytes()
+    if len(data) > max_bytes:
+        raise ValueError(f"图片超过 {max_bytes} 字节：{len(data)}")
+    return {
+        "type": "image",
+        "data": {"file": "base64://" + base64.b64encode(data).decode("ascii")},
+    }
 
 
 def _segments_to_text(segments: Any) -> str:
@@ -133,10 +163,10 @@ class OneBotSender:
             self._client.close()
             self._client = None
 
-    def send(self, chat_key: str, text: str) -> None:
+    def _post(self, chat_key: str, message: object) -> None:
         kind, _, target = chat_key.partition(":")
         action = "send_private_msg" if kind == "private" else "send_group_msg"
-        payload = {"message": text}
+        payload: dict[str, Any] = {"message": message}
         if kind == "private":
             payload["user_id"] = int(target)
         else:
@@ -153,3 +183,17 @@ class OneBotSender:
         body = response.json()
         if body.get("status") not in {None, "ok"}:
             raise RuntimeError(f"OneBot 发送失败：{body}")
+
+    def send(self, chat_key: str, text: str) -> None:
+        """发纯文本；文本一律先转义。"""
+        self._post(chat_key, escape_cq(text))
+
+    def send_segments(self, chat_key: str, segments: list[dict[str, Any]]) -> None:
+        """发消息段数组；超过上限截断，不整条丢弃。"""
+        if not segments:
+            return
+        self._post(chat_key, segments[:MAX_SEGMENTS])
+
+    def send_image(self, chat_key: str, path: Path) -> None:
+        """发一张本地图片。"""
+        self.send_segments(chat_key, [image_segment(path)])

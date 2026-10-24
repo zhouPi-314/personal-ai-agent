@@ -13,11 +13,11 @@ from collections.abc import Awaitable, Callable
 
 import websockets
 
-from ..chat.humanize import OutgoingPart
+from ..chat.humanize import Outgoing, OutgoingMedia, OutgoingPart
 from ..chat.wake import ChatMessage, WakePolicy
 from .onebot import InboundMessage, OneBotSender, parse_event
 
-Respond = Callable[[InboundMessage], Awaitable[list[OutgoingPart] | None]]
+Respond = Callable[[InboundMessage], Awaitable[list[Outgoing] | None]]
 
 
 class OneBotRunner:
@@ -73,7 +73,7 @@ class OneBotRunner:
             return None
 
         for index, part in enumerate(parts):
-            await asyncio.to_thread(self.sender.send, message.chat_key, part.text)
+            await self._deliver(message.chat_key, part)
             if index < len(parts) - 1 and part.pause_after > 0:
                 await asyncio.sleep(part.pause_after)
         self.log.info(
@@ -82,11 +82,28 @@ class OneBotRunner:
                 "fields": {
                     "chat": message.chat_key,
                     "parts": len(parts),
-                    "chars": sum(len(p.text) for p in parts),
+                    "chars": sum(len(p.text) for p in parts if isinstance(p, OutgoingPart)),
                 }
             },
         )
-        return "".join(part.text for part in parts)
+        return "".join(part.text for part in parts if isinstance(part, OutgoingPart))
+
+    async def _deliver(self, chat_key: str, part: Outgoing) -> None:
+        """发一段。失败只降级，绝不把异常抛回接收循环（否则会触发整条重连）。"""
+        try:
+            if isinstance(part, OutgoingMedia):
+                await asyncio.to_thread(self.sender.send_image, chat_key, part.path)
+                return
+            await asyncio.to_thread(self.sender.send, chat_key, part.text)
+        except Exception as exc:  # noqa: BLE001 - 发送失败不能拖垮接收循环
+            self.log.warning("发送失败：%s", exc)
+            if isinstance(part, OutgoingPart):
+                return  # 文字已经尽力，不再重试
+            fallback = part.caption or "想给你发张图，没发出去"
+            try:
+                await asyncio.to_thread(self.sender.send, chat_key, fallback)
+            except Exception as again:  # noqa: BLE001
+                self.log.warning("降级发送也失败：%s", again)
 
     async def run(self, *, stop: asyncio.Event | None = None) -> None:
         headers = {}

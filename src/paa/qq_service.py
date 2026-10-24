@@ -14,13 +14,16 @@ from sqlalchemy import select
 
 from .adapters.onebot import InboundMessage, OneBotSender
 from .adapters.runner import OneBotRunner
+from .audit import AuditService
 from .chat.history import MessageStore
-from .chat.humanize import OutgoingPart, plan
+from .chat.humanize import Outgoing, OutgoingMedia, OutgoingPart, plan_media
 from .chat.session import ChatSession
-from .config import Settings
+from .config import PROJECT_ROOT, Settings
 from .db import session_scope
 from .llm import BrainRouter
 from .logging import get_logger
+from .media.router import MediaRouter, MediaSettings
+from .media.stickers import StickerLibrary
 from .memory import MemoryService
 from .models import User
 from .persona import PersonaCard
@@ -60,12 +63,28 @@ class QqService:
             respond=self.respond,
             owner_ids=frozenset({settings.owner_qq}) if settings.owner_qq else frozenset(),
         )
+        self.media = MediaRouter(
+            settings=MediaSettings(
+                enabled=settings.media_enabled,
+                sticker_enabled=settings.media_sticker_enabled,
+                sticker_cooldown_sec=settings.media_sticker_cooldown_sec,
+                sticker_daily_cap=settings.media_sticker_daily_cap,
+                sticker_recent=settings.media_sticker_recent,
+            ),
+            # 总开关关闭时连素材库都不读：默认配置下零磁盘 I/O
+            library=(
+                StickerLibrary.load(PROJECT_ROOT / settings.media_sticker_dir)
+                if settings.media_enabled
+                else StickerLibrary()
+            ),
+            audit=self._audit_media,
+        )
         self._task: asyncio.Task | None = None
         self._stop: asyncio.Event | None = None
         self.log = get_logger("paa.qq")
         self._quota_notice_day: str | None = None
 
-    async def respond(self, message: InboundMessage) -> list[OutgoingPart] | None:
+    async def respond(self, message: InboundMessage) -> list[Outgoing] | None:
         self.log.info(
             "收到消息",
             extra={
@@ -119,7 +138,20 @@ class QqService:
 
         result = await asyncio.to_thread(_run)
         hour = datetime.now().hour
-        parts = plan(result.reply, hour=hour, rng=random.Random())
+        decision = self.media.sticker_for(
+            chat_key=message.chat_key,
+            reply_text=result.reply,
+            day=datetime.now().strftime("%Y-%m-%d"),
+            actor=f"qq:{message.sender_id}",
+        )
+        media = None
+        if decision.pick is not None:
+            media = OutgoingMedia(
+                kind="sticker",
+                path=decision.pick.path,
+                sha256=decision.pick.sha256,
+            )
+        parts = plan_media(result.reply, hour=hour, rng=random.Random(), media=media)
         self.log.info(
             "生成回复",
             extra={
@@ -129,10 +161,19 @@ class QqService:
                     "in_tokens": result.input_tokens,
                     "out_tokens": result.output_tokens,
                     "parts": len(parts),
+                    "sticker": decision.reason,
                 }
             },
         )
         return parts
+
+    def _audit_media(self, **payload: object) -> None:
+        """媒体动作留痕。写库失败只告警：审计不能反向阻断聊天。"""
+        try:
+            with session_scope() as db:
+                AuditService(db).record(**payload)  # type: ignore[arg-type]
+        except Exception as exc:  # noqa: BLE001
+            self.log.warning("媒体审计写入失败：%s", exc)
 
     def _ensure_user(self, sender_id: str) -> uuid.UUID:
         with session_scope() as db:

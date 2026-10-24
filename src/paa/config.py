@@ -49,6 +49,14 @@ class Settings(BaseSettings):
     owner_qq: str = ""
     # backup_remote: str = ""  # 云服务器已取消
 
+    # 媒体能力（默认全关；设计见 docs/multimodal/）
+    media_enabled: bool = False
+    media_sticker_enabled: bool = False
+    media_sticker_dir: str = "data/stickers"
+    media_sticker_cooldown_sec: float = 60.0
+    media_sticker_daily_cap: int = 20
+    media_sticker_recent: int = 5
+
 
 @lru_cache
 def get_settings() -> Settings:

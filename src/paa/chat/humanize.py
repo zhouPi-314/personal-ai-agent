@@ -8,6 +8,7 @@ from __future__ import annotations
 import random
 import re
 from dataclasses import dataclass, field
+from pathlib import Path
 
 DEFAULT_MAX_CHARS = 40
 MIN_MERGE_CHARS = 6
@@ -34,6 +35,22 @@ class OutgoingPart:
     text: str
     typing_seconds: float
     pause_after: float = field(default=0.0)
+
+
+@dataclass(frozen=True)
+class OutgoingMedia:
+    """一条要发出去的媒体。只描述，不读文件——发送由适配器负责。"""
+
+    kind: str  # sticker / image / voice
+    path: Path
+    sha256: str = ""
+    caption: str = ""
+    typing_seconds: float = 0.0
+    pause_after: float = 0.0
+
+
+# 一条回复里可以混排文字与媒体；入口层按类型分发。
+Outgoing = OutgoingPart | OutgoingMedia
 
 
 DEFAULT_CONFIG = HumanizeConfig()
@@ -129,3 +146,18 @@ def plan(
             )
         )
     return result
+
+
+def plan_media(
+    text: str,
+    *,
+    hour: int,
+    rng: random.Random,
+    media: OutgoingMedia | None = None,
+    config: HumanizeConfig = DEFAULT_CONFIG,
+) -> list[Outgoing]:
+    """文字计划 + 可选的一条媒体；媒体排在最前面，像先甩张图再说话。"""
+    parts: list[Outgoing] = list(plan(text, hour=hour, rng=rng, config=config))
+    if media is None:
+        return parts
+    return [media, *parts]
