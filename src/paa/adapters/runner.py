@@ -67,7 +67,12 @@ class OneBotRunner:
         if not verdict.wake:
             return None
 
-        parts = await self.respond(message)
+        try:
+            parts = await self.respond(message)
+        except Exception as exc:  # noqa: BLE001 - 模型/数据库失败不能打断接收循环
+            # 以前这里会把异常抛出去，导致每失败一条消息就重连一次 WS。
+            self.log.warning("生成回复失败：%s", exc)
+            return None
         if not parts:
             self.log.debug("决定不回复", extra={"fields": {"chat": message.chat_key}})
             return None

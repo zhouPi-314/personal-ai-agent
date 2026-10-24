@@ -106,6 +106,9 @@ class QqService:
                 }
             },
         )
+        # 先收录媒体，再走模型：模型 404/超时都不能让学习线丢素材
+        self._spawn_learn(message)
+
         session = self.sessions.get(message.chat_key)
         if session is None:
             user_id = await asyncio.to_thread(self._ensure_user, message.sender_id)
@@ -176,7 +179,6 @@ class QqService:
                 }
             },
         )
-        self._spawn_learn(message)
         return parts
 
     # ── 学习线（M1.5）─────────────────────────────────────────

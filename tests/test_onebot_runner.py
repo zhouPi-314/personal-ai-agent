@@ -115,6 +115,20 @@ async def test_multi_part_reply_sends_each_part():
 
 
 @pytest.mark.asyncio
+async def test_model_failure_does_not_break_receive_loop():
+    sender = FakeSender()
+
+    async def respond(message):
+        raise RuntimeError("模型返回 404")
+
+    result = await _runner(respond, sender).handle(_private_event(), now=0.0)
+
+    assert result is None          # 不回复
+    assert sender.sent == []       # 也没发任何东西
+    # 关键：异常没有穿透出去，接收循环还能继续处理下一条
+
+
+@pytest.mark.asyncio
 async def test_heartbeat_is_ignored():
     async def respond(message):  # pragma: no cover
         raise AssertionError("不应该回复")
