@@ -70,6 +70,13 @@ class Settings(BaseSettings):
     media_vision_model: str = "Qwen/Qwen3-VL-8B-Instruct"
     media_egress_allow: str = ""  # 逗号分隔，例如 image
 
+    # 语音识别（M3）：本地侧车，不出网
+    media_asr_enabled: bool = False
+    media_asr_python: str = "runtime/python312/python.exe"
+    media_asr_model_dir: str = "models/sensevoice"
+    media_asr_worker: str = "scripts/asr_worker.py"
+    media_ffmpeg: str = "runtime/ffmpeg/bin/ffmpeg.exe"
+
 
 @lru_cache
 def get_settings() -> Settings:

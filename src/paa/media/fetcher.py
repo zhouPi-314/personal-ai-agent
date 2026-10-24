@@ -46,13 +46,27 @@ class MediaFetchError(ValueError):
         self.detail = detail
 
 
+_AUDIO_MAGIC: tuple[tuple[bytes, str, str], ...] = (
+    (b"#!AMR", "audio/amr", ".amr"),
+    (b"ID3", "audio/mpeg", ".mp3"),
+    (b"OggS", "audio/ogg", ".ogg"),
+)
+
+
 def sniff(data: bytes) -> tuple[str, str] | None:
-    """返回 (mime, 后缀)；认不出就返回 None。"""
+    """返回 (mime, 后缀)；认不出就返回 None。图片与音频都认。"""
     for magic, mime, suffix in _MAGIC:
         if data.startswith(magic):
             if mime == "image/webp" and data[8:12] != b"WEBP":
                 continue
+            if mime == "image/wav" and data[8:12] != b"WAVE":
+                continue
             return mime, suffix
+    for magic, mime, suffix in _AUDIO_MAGIC:
+        if data.startswith(magic):
+            return mime, suffix
+    if data.startswith(b"RIFF") and data[8:12] == b"WAVE":
+        return "audio/wav", ".wav"
     return None
 
 
@@ -82,6 +96,7 @@ def fetch(
     max_bytes: int = MAX_BYTES,
     timeout: float = TIMEOUT,
     transport: httpx.BaseTransport | None = None,
+    allow_audio: bool = False,
 ) -> MediaInput:
     """把 ref 落成 out_dir 下的随机文件名，并返回校验后的元数据。"""
     data = _read(ref, max_bytes=max_bytes, timeout=timeout, transport=transport)
@@ -92,8 +107,10 @@ def fetch(
 
     kind = sniff(data)
     if kind is None:
-        raise MediaFetchError("E_MIME_MISMATCH", "不是可识别的图片格式")
+        raise MediaFetchError("E_MIME_MISMATCH", "不是可识别的图片或音频格式")
     mime, suffix = kind
+    if not allow_audio and not mime.startswith("image/"):
+        raise MediaFetchError("E_MIME_MISMATCH", "这里只接受图片")
 
     out_dir.mkdir(parents=True, exist_ok=True)
     target = out_dir / f"{uuid.uuid4().hex}{suffix}"

@@ -45,6 +45,7 @@ class MediaSettings:
     # 图片理解（M2）：默认关；egress_allow 为空表示任何图片都不外发
     vision_enabled: bool = False
     vision_model: str = ""
+    asr_enabled: bool = False
     egress_allow: frozenset[str] = frozenset()
 
 
@@ -73,12 +74,14 @@ class MediaRouter:
         clock: Callable[[], float] = time.monotonic,
         rng: random.Random | None = None,
         vision: OpenAIVisionProvider | None = None,
+        asr: object | None = None,
         tmp_dir: Path | None = None,
         max_bytes: int = 2 * 1024 * 1024,
     ) -> None:
         self.settings = settings
         self.library = library
         self.vision = vision
+        self.asr = asr
         self.tmp_dir = tmp_dir
         self.max_bytes = max_bytes
         self.provider = provider or LocalStickerProvider(library, rng=rng)
@@ -97,7 +100,67 @@ class MediaRouter:
             return self.settings.sticker_enabled
         if capability is Capability.ANALYZE_IMAGE:
             return self.settings.vision_enabled
+        if capability is Capability.RECOGNIZE_AUDIO:
+            return self.settings.asr_enabled
         return False
+
+    # ── 语音识别（M3，本地执行、不出网）────────────────────────
+    def transcribe_audio(
+        self,
+        ref: MediaRef,
+        *,
+        chat_key: str,
+        actor: str = "",
+    ) -> MediaResult:
+        if not self.settings.enabled or not self.settings.asr_enabled:
+            return _denied(Capability.RECOGNIZE_AUDIO, "asr_disabled")
+        if self.asr is None or not getattr(self.asr, "available", lambda: False)():
+            return MediaResult(
+                status=ResultStatus.FAILED,
+                capability=Capability.RECOGNIZE_AUDIO,
+                error_code="E_MODEL_UNAVAILABLE",
+            )
+        if self.tmp_dir is None:
+            return MediaResult(
+                status=ResultStatus.FAILED,
+                capability=Capability.RECOGNIZE_AUDIO,
+                error_code="E_CONFIG",
+            )
+
+        item = None
+        result: MediaResult
+        try:
+            item = fetch(
+                ref, out_dir=self.tmp_dir, max_bytes=self.max_bytes, allow_audio=True
+            )
+            result = self.asr.recognize_audio(item)
+        except MediaFetchError as exc:
+            self._emit(actor=actor or chat_key, verdict="denied", detail=exc.code)
+            return MediaResult(
+                status=ResultStatus.REJECTED,
+                capability=Capability.RECOGNIZE_AUDIO,
+                error_code=exc.code,
+                error_detail=exc.detail,
+            )
+        except Exception as exc:  # noqa: BLE001 - 转写失败不能影响聊天
+            self._emit(actor=actor or chat_key, verdict="failed", detail=str(exc)[:120])
+            return MediaResult(
+                status=ResultStatus.FAILED,
+                capability=Capability.RECOGNIZE_AUDIO,
+                error_code="E_PROVIDER",
+                error_detail=str(exc)[:120],
+            )
+        finally:
+            if item is not None:
+                item.local_path.unlink(missing_ok=True)
+
+        self._emit(
+            actor=actor or chat_key,
+            verdict="allowed" if result.status is ResultStatus.OK else "failed",
+            sha256=getattr(item, "sha256", "") or "",
+            detail="asr status=" + result.status.value + " code=" + result.error_code,
+        )
+        return result
 
     # ── 图片理解（M2）──────────────────────────────────────────
     def describe_image(
