@@ -46,6 +46,7 @@ class MediaSettings:
     vision_enabled: bool = False
     vision_model: str = ""
     asr_enabled: bool = False
+    tts_enabled: bool = False
     egress_allow: frozenset[str] = frozenset()
 
 
@@ -75,6 +76,7 @@ class MediaRouter:
         rng: random.Random | None = None,
         vision: OpenAIVisionProvider | None = None,
         asr: object | None = None,
+        tts: object | None = None,
         tmp_dir: Path | None = None,
         max_bytes: int = 2 * 1024 * 1024,
     ) -> None:
@@ -82,6 +84,7 @@ class MediaRouter:
         self.library = library
         self.vision = vision
         self.asr = asr
+        self.tts = tts
         self.tmp_dir = tmp_dir
         self.max_bytes = max_bytes
         self.provider = provider or LocalStickerProvider(library, rng=rng)
@@ -102,7 +105,47 @@ class MediaRouter:
             return self.settings.vision_enabled
         if capability is Capability.RECOGNIZE_AUDIO:
             return self.settings.asr_enabled
+        if capability is Capability.SYNTHESIZE_SPEECH:
+            return self.settings.tts_enabled
         return False
+
+    # ── 语音合成（M3，本地执行、不出网）────────────────────────
+    def synthesize_speech(
+        self, text: str, *, chat_key: str, actor: str = ""
+    ) -> MediaResult:
+        if not self.settings.enabled or not self.settings.tts_enabled:
+            return _denied(Capability.SYNTHESIZE_SPEECH, "tts_disabled")
+        if self.tts is None or not getattr(self.tts, "available", lambda: False)():
+            return MediaResult(
+                status=ResultStatus.FAILED,
+                capability=Capability.SYNTHESIZE_SPEECH,
+                error_code="E_MODEL_UNAVAILABLE",
+            )
+        if self.tmp_dir is None:
+            return MediaResult(
+                status=ResultStatus.FAILED,
+                capability=Capability.SYNTHESIZE_SPEECH,
+                error_code="E_CONFIG",
+            )
+
+        result: MediaResult
+        try:
+            result = self.tts.synthesize_speech(text, out_dir=self.tmp_dir)
+        except Exception as exc:  # noqa: BLE001 - 合成失败要退回文字
+            self._emit(actor=actor or chat_key, verdict="failed", detail=str(exc)[:120])
+            return MediaResult(
+                status=ResultStatus.FAILED,
+                capability=Capability.SYNTHESIZE_SPEECH,
+                error_code="E_PROVIDER",
+                error_detail=str(exc)[:120],
+            )
+
+        self._emit(
+            actor=actor or chat_key,
+            verdict="allowed" if result.status is ResultStatus.OK else "failed",
+            detail="tts status=" + result.status.value + " code=" + result.error_code,
+        )
+        return result
 
     # ── 语音识别（M3，本地执行、不出网）────────────────────────
     def transcribe_audio(

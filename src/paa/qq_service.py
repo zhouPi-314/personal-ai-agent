@@ -27,6 +27,7 @@ from .media.context import format_image_block
 from .media.contracts import ResultStatus
 from .media.fetcher import fetch
 from .media.providers.asr_sidecar import ASRSidecarProvider
+from .media.providers.tts_sapi import SapiTTSProvider
 from .media.providers.vision_openai import OpenAIVisionProvider
 from .media.quarantine import Quarantine
 from .media.router import MediaRouter, MediaSettings
@@ -82,6 +83,7 @@ class QqService:
                 vision_enabled=settings.media_vision_enabled,
                 vision_model=settings.media_vision_model,
                 asr_enabled=settings.media_asr_enabled,
+                tts_enabled=settings.media_tts_enabled,
                 egress_allow=frozenset(
                     item.strip()
                     for item in (settings.media_egress_allow or "").split(",")
@@ -113,6 +115,15 @@ class QqService:
                     model_dir=PROJECT_ROOT / settings.media_asr_model_dir,
                 )
                 if settings.media_asr_enabled
+                else None
+            ),
+            tts=(
+                SapiTTSProvider(
+                    script=PROJECT_ROOT / "scripts" / "tts_sapi.ps1",
+                    voice=settings.media_tts_voice,
+                    max_chars=settings.media_tts_max_chars,
+                )
+                if settings.media_tts_enabled
                 else None
             ),
         )
@@ -217,7 +228,35 @@ class QqService:
                 path=decision.pick.path,
                 sha256=decision.pick.sha256,
             )
-        parts = plan_media(result.reply, hour=hour, rng=random.Random(), media=media)
+        parts: list[Outgoing] = plan_media(
+            result.reply, hour=hour, rng=random.Random(), media=media
+        )
+        if self._should_speak(message):
+            voice = await asyncio.to_thread(
+                self.media.synthesize_speech,
+                result.reply,
+                chat_key=message.chat_key,
+                actor=f"qq:{message.sender_id}",
+            )
+            if voice.status is ResultStatus.OK:
+                # 合成成功就用语音代替文字；失败则保留原有文字计划
+                parts = [
+                    OutgoingMedia(
+                        kind="voice",
+                        path=Path(str(voice.data.get("path") or "")),
+                        caption="",
+                    )
+                ]
+                self.log.info(
+                    "语音合成",
+                    extra={
+                        "fields": {
+                            "chat": message.chat_key,
+                            "bytes": voice.data.get("bytes"),
+                            "truncated": voice.data.get("truncated"),
+                        }
+                    },
+                )
         self.log.info(
             "生成回复",
             extra={
@@ -232,6 +271,16 @@ class QqService:
             },
         )
         return parts
+
+    def _should_speak(self, message: InboundMessage) -> bool:
+        if not self.settings.media_tts_enabled:
+            return False
+        mode = (self.settings.media_tts_mode or "off").strip().lower()
+        if mode == "always":
+            return True
+        if mode == "voice_input":
+            return any(ref.kind == "audio" for ref in message.media)
+        return False
 
     # ── 媒体理解（M2 图片 / M3 语音）──────────────────────────
     async def _with_media_context(self, message: InboundMessage) -> str:

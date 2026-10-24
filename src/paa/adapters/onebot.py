@@ -17,6 +17,7 @@ from ..media.contracts import MediaRef
 
 MAX_SEGMENTS = 5
 MAX_IMAGE_BYTES = 8 * 1024 * 1024
+MAX_RECORD_BYTES = 8 * 1024 * 1024
 
 # OneBot v11 转义规则；顺序不能变，& 必须最先替换。
 _CQ_ESCAPES = (("&", "&amp;"), ("[", "&#91;"), ("]", "&#93;"), (",", "&#44;"))
@@ -235,3 +236,11 @@ class OneBotSender:
     def send_image(self, chat_key: str, path: Path) -> None:
         """发一张本地图片。"""
         self.send_segments(chat_key, [image_segment(path)])
+
+    def send_record(self, chat_key: str, path: Path, *, max_bytes: int = MAX_RECORD_BYTES) -> None:
+        """发语音。传 WAV 即可，NapCat 会自行转码（真机验证过 QQ 能正常播放）。"""
+        data = Path(path).read_bytes()
+        if len(data) > max_bytes:
+            raise ValueError(f"语音超过 {max_bytes} 字节：{len(data)}")
+        payload = "base64://" + base64.b64encode(data).decode("ascii")
+        self.send_segments(chat_key, [{"type": "record", "data": {"file": payload}}])

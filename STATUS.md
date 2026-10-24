@@ -35,7 +35,7 @@
 | 多模态 C2 | 素材库（39 张，MIT）+ 私聊限制 + pre-commit 修复 | 100% | ✅ |
 | 多模态 M1.5 | 学习线：从聊天收录表情包，隔离区 + 人工晋级 | 100% | ✅ 代码+测试，默认只收不自动入库 |
 | 多模态 D (M2) | 图片理解：云端视觉 + 外发闸门 + 注入边界 | 100% | ✅ 代码+测试，待真机 |
-| 多模态 E (M3) | 语音：ASR 侧车 + ffmpeg + 端到端（AMR→文字）已通；TTS 未做 | 70% | 🚧 |
+| 多模态 E (M3) | 语音：ASR 入站 + SAPI TTS 出站均已真机跑通 | 90% | ✅ 待音色优化 |
 | 多模态 F | 唱歌 | 0% | ⬜ 未开始 |
 
 ## 阶段 0 · 环境与边界 ✅
@@ -176,6 +176,8 @@
 | 2026-10-24 | 阶段 D（M2）：云端视觉 Provider、外发闸门、数据区隔离、注入测试 | ✅ 250 passed / ruff 全绿 |
 | 2026-10-24 | 阶段 E 开工：摸清 QQ 语音是 `.amr`；装便携 Python 3.12 + sherpa-onnx + SenseVoice | ✅ 实测 RTF 0.03 |
 | 2026-10-24 | 装 ffmpeg 9.0.2；端到端 AMR→文字 2.28s（5.7s 音频），转写完全正确 | ✅ |
+| 2026-10-24 | ASR 真机：收语音 → 17 字转写 → 2.7s 内回复 | ✅ |
+| 2026-10-24 | TTS：确认 NapCat 直吃 WAV（不用 silk），SAPI 合成 + record 段发送真机可播放 | ✅ |
 | 2026-10-24 | 修 bug：语音消息被误送去图片理解/学习线（E_MIME_MISMATCH） | ✅ 按 media.kind 过滤 |
 
 ## 变更记录
@@ -259,3 +261,7 @@
   `providers.asr_sidecar`、`MediaRouter.transcribe_audio`（闸门+审计）、QQ 路径接入语音。
   端到端实测：5.7s AMR → 2.28s → 文字完全正确；新增 14 条测试，265 passed。
   踩坑：子进程 stdout 重定向时 Python 用 cp936，中文变 GBK 乱码，已强制 PYTHONIOENCODING/PYTHONUTF8。
+- 2026-10-24：TTS 落地（SAPI，零下载）。真机确认 NapCat 直接接受 WAV，无需自建 silk 编码器；
+  文本经临时文件传给 PowerShell（防注入），合成失败自动退回文字；模式 voice_input：你发语音它才回语音。
+  新增 scripts/tts_sapi.ps1、providers.tts_sapi、MediaRouter.synthesize_speech、OneBotSender.send_record、
+  runner 按 kind 分发；新增 11 条测试，全量 276 passed。

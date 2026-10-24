@@ -77,6 +77,12 @@ class Settings(BaseSettings):
     media_asr_worker: str = "scripts/asr_worker.py"
     media_ffmpeg: str = "runtime/ffmpeg/bin/ffmpeg.exe"
 
+    # 语音合成（M3）：off / voice_input（收到语音才回语音）/ always
+    media_tts_enabled: bool = False
+    media_tts_mode: str = "voice_input"
+    media_tts_voice: str = "Microsoft Huihui Desktop"
+    media_tts_max_chars: int = 150
+
 
 @lru_cache
 def get_settings() -> Settings:

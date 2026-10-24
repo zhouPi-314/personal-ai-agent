@@ -97,14 +97,19 @@ class OneBotRunner:
         """发一段。失败只降级，绝不把异常抛回接收循环（否则会触发整条重连）。"""
         try:
             if isinstance(part, OutgoingMedia):
-                await asyncio.to_thread(self.sender.send_image, chat_key, part.path)
+                if part.kind == "voice":
+                    await asyncio.to_thread(self.sender.send_record, chat_key, part.path)
+                else:
+                    await asyncio.to_thread(self.sender.send_image, chat_key, part.path)
                 return
             await asyncio.to_thread(self.sender.send, chat_key, part.text)
         except Exception as exc:  # noqa: BLE001 - 发送失败不能拖垮接收循环
             self.log.warning("发送失败：%s", exc)
             if isinstance(part, OutgoingPart):
                 return  # 文字已经尽力，不再重试
-            fallback = part.caption or "想给你发张图，没发出去"
+            fallback = part.caption or (
+                "想给你发条语音，没发出去" if part.kind == "voice" else "想给你发张图，没发出去"
+            )
             try:
                 await asyncio.to_thread(self.sender.send, chat_key, fallback)
             except Exception as again:  # noqa: BLE001
