@@ -3,7 +3,7 @@ repos:
     hooks:
       - id: secret-scan
         name: secret scan
-        entry: pwsh -NoProfile -File scripts/secret-scan.ps1
+        entry: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/secret-scan.ps1
         language: system
         pass_filenames: false
         always_run: true

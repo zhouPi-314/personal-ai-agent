@@ -43,7 +43,7 @@
 ```
 
 1. `.gitignore` 必须先于第一次提交存在，事后再加等于无效。
-2. `pwsh -File scripts/secret-scan.ps1` 必须输出 `OK`，不允许"先提交再补"。
+2. `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/secret-scan.ps1` 必须输出 `OK`，不允许"先提交再补"。
 3. 文档内不出现公网 IP、实例 ID、内网地址、用户名、主机名（脚本会拦截）。
 4. 一旦误提交：改文件不够，必须重写历史并轮换已泄露的凭据。
 

@@ -39,10 +39,10 @@
 | D32 | 文档漂移：`SECURITY.md` 称审计表未建、`troubleshooting.md` 的 ui.token 路径不存在、`.env.example` 缺 4 项、`design-vision.md` 过时 | 阶段 A 审计 | 不影响运行 | 阶段 C 之前 | 照文档操作会失败（尤其令牌与配置项） | 🚧 `ARCHITECTURE.md` 已于 2026-10-24 补齐；其余待办 |
 | D33 | 维护台：`include_router` 重复注册、`/api/status` 无鉴权、令牌用 `!=` 比较（P-12） | 阶段 A 审计 | 仅回环可达 | 阶段 C 加媒体端点之前 | 新增端点会复制同一缺陷 | ⬜ 待办 |
 | D34 | M1 只审计「选择表情包」，未单独审计「投递结果」（send_sticker） | 阶段 C | 投递在适配器里，加审计要多一次写库 | 阶段 D 之前 | 发失败时无从判断是选择问题还是网关问题 | ⬜ 待办 |
-| D35 | 素材库为空：代码就绪但一张图片都没有 | 阶段 C | 采集需要你批准具体来源与许可（候选：Microsoft Fluent Emoji，MIT） | **阶段 C2（若你批准采集）** | 功能开关打开也发不出任何表情包 | ⬜ 待办 |
+| D35 | 素材库为空：代码就绪但一张图片都没有 | 阶段 C | 采集需要你批准具体来源与许可（候选：Microsoft Fluent Emoji，MIT） | **阶段 C2（若你批准采集）** | 功能开关打开也发不出任何表情包 | ✅ 已解决（39 张 Fluent Emoji，MIT，索引已生成，2026-10-24） |
 | D36 | 媒体情绪判定用关键词表，不是语义模型 | 阶段 C | 先保证可控与可测 | 出现明显误判时 | 该发的不发（漏发），但不会乱发 | 🚧 已知限制 |
 | D37 | `scripts/secret-scan.ps1` 曾丢失 UTF-8 BOM，在 Windows PowerShell 5.1 下中文注释吞掉下一行，导致**排除规则与公网 IP 规则整段失效** | 阶段 C 提交时发现 | 已当场定位 | — | 密钥扫描器"看起来在跑"但实际不过滤 .venv/.env，噪声淹没真命中 | ✅ 已修复（补 BOM + 链路本地段白名单，扫描恢复 OK） |
-| D38 | pre-commit 的 secret-scan hook 调用 `pwsh`，本机只装了 Windows PowerShell 5.1（`pwsh` 不存在）→ **钩子永远失败**，只能用 `--no-verify` 提交 | 阶段 C 提交时发现 | 需改 hook 或装 PowerShell 7 | **下一次提交前** | 每次提交都绕过安全网，等于没有 pre-commit | ⬜ 待办 |
+| D38 | pre-commit 的 secret-scan hook 调用 `pwsh`，本机只装了 Windows PowerShell 5.1（`pwsh` 不存在）→ **钩子永远失败**，只能用 `--no-verify` 提交 | 阶段 C 提交时发现 | 需改 hook 或装 PowerShell 7 | **下一次提交前** | 每次提交都绕过安全网，等于没有 pre-commit | ✅ 已解决（hook 改 `powershell`，`pre-commit run --all-files` 实跑通过） |
 
 ## 处理规则
 

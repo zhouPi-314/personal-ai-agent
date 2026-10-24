@@ -112,6 +112,25 @@ def test_empty_library_returns_empty_library():
     assert router.sticker_for(chat_key="c", reply_text="哈哈", day="d").reason == "empty_library"
 
 
+def test_group_is_blocked_by_default():
+    decision = _router().sticker_for(
+        chat_key="group:1", reply_text="哈哈", day="d", is_group=True
+    )
+    assert decision.pick is None and decision.reason == "group_disabled"
+
+
+def test_group_allowed_when_private_only_off():
+    router = _router(sticker_private_only=False)
+    decision = router.sticker_for(
+        chat_key="group:1", reply_text="哈哈", day="d", is_group=True
+    )
+    assert decision.ok and decision.tag == "开心"
+
+
+def test_private_chat_unaffected_by_private_only_flag():
+    assert _router().sticker_for(chat_key="private:1", reply_text="哈哈", day="d").ok
+
+
 def test_no_intent_means_no_sticker():
     decision = _router().sticker_for(chat_key="c", reply_text="明天九点开会", day="d")
     assert decision.pick is None and decision.reason == "no_intent"

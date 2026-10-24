@@ -35,7 +35,8 @@
 
 1. 先写 `.gitignore`（覆盖 `.env`、`.venv`、`data/`、`logs/`、密钥文件）。
 2. 再写 `.env.example`（只放空占位，不放任何真实值）。
-3. 执行 `pwsh -File scripts/secret-scan.ps1`，必须输出 `OK`。
+3. 执行 `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/secret-scan.ps1`，必须输出 `OK`。
+   （脚本必须是 **UTF-8 with BOM**：无 BOM 时 Windows PowerShell 5.1 会把中文注释连下一行一起吃掉，排除规则静默失效。）
 4. 以上全部通过，才允许 `git init`。
 5. 首次提交前执行 `git status --short` 复核，不得出现 `.env`、`.venv`、`data/`、`logs/`。
 

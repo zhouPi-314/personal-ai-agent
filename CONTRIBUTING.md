@@ -41,7 +41,7 @@ python -m venv .venv
 |---|---|---|
 | 1 | 写 `.gitignore` | 覆盖 `.env`、`.venv`、`data/`、`logs/`、`*.pem`/`*.key` |
 | 2 | 写 `.env.example` | 只有空占位，无任何真实值 |
-| 3 | 跑 `pwsh -File scripts/secret-scan.ps1` | 输出 `OK: no secrets or identifying info found` |
+| 3 | 跑 `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/secret-scan.ps1` | 输出 `OK: no secrets or identifying info found` |
 | 4 | `git init` | 前三步全部通过之后才执行 |
 | 5 | `git status --short` 复核 | 看不到 `.env`、`.venv`、`data/`、`logs/` |
 | 6 | 首次提交 | 提交信息说明这是初始骨架 |

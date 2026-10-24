@@ -30,6 +30,7 @@ class MediaSettings:
     sticker_cooldown_sec: float = 60.0
     sticker_daily_cap: int = 20
     sticker_recent: int = 5
+    sticker_private_only: bool = True
 
 
 @dataclass(frozen=True)
@@ -74,12 +75,22 @@ class MediaRouter:
         return capability is Capability.SELECT_STICKER and self.settings.sticker_enabled
 
     def sticker_for(
-        self, *, chat_key: str, reply_text: str, day: str, actor: str = ""
+        self,
+        *,
+        chat_key: str,
+        reply_text: str,
+        day: str,
+        actor: str = "",
+        is_group: bool = False,
     ) -> StickerDecision:
         """决定是否随这条回复发一张表情包。任何异常都降级为"不发"。"""
         try:
             return self._sticker_for(
-                chat_key=chat_key, reply_text=reply_text, day=day, actor=actor or chat_key
+                chat_key=chat_key,
+                reply_text=reply_text,
+                day=day,
+                actor=actor or chat_key,
+                is_group=is_group,
             )
         except Exception as exc:  # noqa: BLE001 - 表情包发不出去不能影响聊天
             log.warning("表情包判定异常：%s", exc)
@@ -87,12 +98,15 @@ class MediaRouter:
             return StickerDecision(None, "exception")
 
     def _sticker_for(
-        self, *, chat_key: str, reply_text: str, day: str, actor: str
+        self, *, chat_key: str, reply_text: str, day: str, actor: str, is_group: bool
     ) -> StickerDecision:
         if not self.settings.enabled:
             return StickerDecision(None, "media_disabled")
         if not self.settings.sticker_enabled:
             return StickerDecision(None, "sticker_disabled")
+        if is_group and self.settings.sticker_private_only:
+            # 群聊接口预留：素材、限频、去重都已就绪，只差这一个开关
+            return StickerDecision(None, "group_disabled")
         if len(self.library) == 0:
             return StickerDecision(None, "empty_library")
 

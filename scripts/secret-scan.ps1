@@ -1,5 +1,6 @@
 ﻿# 提交前扫描：密钥、凭据、可识别信息。命中即退出码 1。
-# 用法：pwsh -File scripts/secret-scan.ps1
+# 用法：powershell -NoProfile -ExecutionPolicy Bypass -File scripts/secret-scan.ps1
+# 本文件必须保存为 UTF-8 with BOM，否则 Windows PowerShell 5.1 会把中文注释与下一行合并。
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent

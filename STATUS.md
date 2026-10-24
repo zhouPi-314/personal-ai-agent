@@ -32,6 +32,7 @@
 | 多模态 A | 只读审计（媒体能力基线、第三方许可、风险矩阵） | 100% | ✅ |
 | 多模态 B | 接口设计（架构 / Provider 契约 / 安全 / 测试计划） | 100% | ✅ 文档完成，零代码 |
 | 多模态 C | M1 表情包发送（素材库/开关/限频/去重/审计/降级） | 100% | ✅ 代码+测试 |
+| 多模态 C2 | 素材库（39 张，MIT）+ 私聊限制 + pre-commit 修复 | 100% | ✅ |
 | 多模态 D—F | 图片理解 → 语音 → 唱歌 | 0% | ⬜ 逐个单独审批 |
 
 ## 阶段 0 · 环境与边界 ✅
@@ -162,6 +163,7 @@
 | 2026-10-24 | 多模态阶段 B：最小变更架构、6 个 Provider 契约、媒体权限模型、测试计划 | ✅ 文档完成，未动 `src/` |
 | 2026-10-24 | A-02 基线核验：`git status` 干净、`pytest` 153 passed、`ruff` 1 处遗留错误（已修） | ✅ 补齐空洞 |
 | 2026-10-24 | 多模态阶段 C（M1）：CQ 转义、消息段数组、素材库、媒体路由器、审计、降级 | ✅ 205 passed / ruff 全绿 |
+| 2026-10-24 | C2：采集 39 张 Fluent Emoji（MIT）、生成索引、加私聊限制、修 pre-commit 钩子 | ✅ 208 passed / 钩子实跑通过 |
 
 ## 变更记录
 
@@ -201,3 +203,10 @@
   `runner` 增加媒体分发与失败降级（顺带修掉 P-13 的异常穿透）；`qq_service` 接入路由器并写审计；
   `policy` 增加媒体分级（本机/出境两档），`config` 与 `.env.example` 增加 6 个 `PAA_MEDIA_*` 项。
   新增 52 条测试，全量 205 passed，`ruff` 全绿。素材库为空（未采集任何图片），功能默认关闭。
+- 2026-10-24：C2 素材库。从 Microsoft Fluent Emoji（MIT，Copyright (c) Microsoft Corporation）采集 39 张 3D 表情，
+  按七个标签落到 `data/stickers/`（只在本机，`data/` 已被 `.gitignore` 排除），`index.json` 逐张记录
+  来源/许可/采集日期/sha256；最大单张 52KB。新增 `PAA_MEDIA_STICKER_PRIVATE_ONLY`，默认只在私聊发表情，
+  群聊路径保留但默认拒绝（`group_disabled`）。
+- 2026-10-24：修 pre-commit 的 secret-scan 钩子：本机没有 `pwsh`，改为 `powershell -NoProfile -ExecutionPolicy Bypass -File`；
+  同时修正 `scripts/secret-scan.ps1` 丢失的 UTF-8 BOM（无 BOM 时 PS 5.1 会把排除规则整段吞掉）。
+  `pre-commit run --all-files` 两个钩子均通过（exit 0），AGENTS/CONTRIBUTING/SECURITY 的用法说明同步更新。

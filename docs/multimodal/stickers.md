@@ -68,6 +68,7 @@ PAA_MEDIA_STICKER_DIR=data/stickers
 PAA_MEDIA_STICKER_COOLDOWN_SEC=60
 PAA_MEDIA_STICKER_DAILY_CAP=20
 PAA_MEDIA_STICKER_RECENT=5
+PAA_MEDIA_STICKER_PRIVATE_ONLY=true   # 先只私聊；群聊路径已实现但默认拒绝
 ```
 
 默认全关；关着的时候连素材库都不加载。
@@ -86,3 +87,16 @@ PAA_MEDIA_STICKER_RECENT=5
 - 只审计"选择"，未单独审计"投递成功"（`DEBT.md` D34）。
 - 素材库为空时功能静默禁用，不报错、不阻塞聊天。
 - 采集素材必须逐张记录来源与许可；无法证明许可的一律不入库（规范 §5.5）。
+
+## 7. 当前素材库（2026-10-24）
+
+| 项 | 值 |
+|---|---|
+| 来源 | Microsoft Fluent Emoji — https://github.com/microsoft/fluentui-emoji |
+| 许可 | MIT（Copyright (c) Microsoft Corporation），逐张写入 `index.json` |
+| 数量 | 39 张（开心 7 / 卖萌 6 / 委屈 6 / 得意 6 / 无语 5 / 生气 4 / 震惊 5） |
+| 格式与体积 | 3D PNG，最大单张 52KB（上限 2MB） |
+| 存放 | 仅本机 `data/stickers/`，**不在 Git 里**（`data/` 已忽略） |
+| 采集方式 | 只取仓库原始 PNG，不做裁剪/改色；文件名改为 ASCII slug |
+
+调整素材时：改目录 → 重跑第 3 步的索引命令即可；标签集合不变。

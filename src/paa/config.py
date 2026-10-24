@@ -56,6 +56,8 @@ class Settings(BaseSettings):
     media_sticker_cooldown_sec: float = 60.0
     media_sticker_daily_cap: int = 20
     media_sticker_recent: int = 5
+    # 先只私聊；群聊接口预留，打开群场景也仍需 owner/被 @ 才唤醒
+    media_sticker_private_only: bool = True
 
 
 @lru_cache

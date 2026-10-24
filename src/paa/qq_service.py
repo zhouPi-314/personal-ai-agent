@@ -70,6 +70,7 @@ class QqService:
                 sticker_cooldown_sec=settings.media_sticker_cooldown_sec,
                 sticker_daily_cap=settings.media_sticker_daily_cap,
                 sticker_recent=settings.media_sticker_recent,
+                sticker_private_only=settings.media_sticker_private_only,
             ),
             # 总开关关闭时连素材库都不读：默认配置下零磁盘 I/O
             library=(
@@ -143,6 +144,7 @@ class QqService:
             reply_text=result.reply,
             day=datetime.now().strftime("%Y-%m-%d"),
             actor=f"qq:{message.sender_id}",
+            is_group=message.is_group,
         )
         media = None
         if decision.pick is not None:
