@@ -9,6 +9,7 @@ import asyncio
 import random
 import uuid
 from datetime import datetime
+from pathlib import Path
 
 from sqlalchemy import select
 
@@ -127,6 +128,22 @@ class QqService:
         )
         # 先收录媒体，再走模型：模型 404/超时都不能让学习线丢素材
         self._spawn_learn(message)
+        audio = next((ref for ref in message.media if ref.kind == "audio"), None)
+        if audio is not None:
+            # 只记结构，不记内容：扩展名 + 是否有 URL，用于判断 QQ 语音的真实格式
+            suffix = Path(audio.name).suffix.lower() if audio.name else ""
+            self.log.info(
+                "收到语音",
+                extra={
+                    "fields": {
+                        "chat": message.chat_key,
+                        "source": audio.source,
+                        "suffix": suffix,
+                        "has_url": audio.locator.lower().startswith(("http://", "https://")),
+                        "name_len": len(audio.name),
+                    }
+                },
+            )
 
         session = self.sessions.get(message.chat_key)
         if session is None:

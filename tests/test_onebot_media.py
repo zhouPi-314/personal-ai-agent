@@ -40,6 +40,16 @@ def test_image_without_source_is_dropped():
     assert msg.text == "[图片]看图"
 
 
+def test_record_segment_is_audio_and_keeps_placeholder():
+    msg = parse_event(
+        _event([{"type": "record", "data": {"file": "abc.amr", "url": "https://cdn.example/v.amr"}}])
+    )
+    assert msg is not None
+    assert msg.media[0].kind == "audio"
+    assert msg.media[0].source == "url"
+    assert msg.text == "[语音]"
+
+
 def test_plain_text_has_no_media():
     msg = parse_event(_event([{"type": "text", "data": {"text": "你好"}}]))
     assert msg is not None
