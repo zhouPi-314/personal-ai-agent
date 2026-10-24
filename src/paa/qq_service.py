@@ -225,9 +225,14 @@ class QqService:
         """把图片理解结果拼成"数据区"文本；关掉视觉时行为与以前一致。"""
         if not self.settings.media_vision_enabled or not message.media:
             return message.text
+        image = next(
+            (ref for ref in message.media if ref.kind in {"image", "sticker"}), None
+        )
+        if image is None:
+            return message.text  # 语音等非图片媒体不走视觉
         result = await asyncio.to_thread(
             self.media.describe_image,
-            message.media[0],
+            image,
             chat_key=message.chat_key,
             actor=f"qq:{message.sender_id}",
             user_text=message.text,
@@ -269,7 +274,8 @@ class QqService:
     def _learn_sync(self, message: InboundMessage) -> None:
         from .media.fetcher import MediaFetchError
 
-        for ref in message.media[:3]:
+        # 学习线只学图片；语音等格式交给 M3
+        for ref in [r for r in message.media if r.kind in {"image", "sticker"}][:3]:
             item = None
             try:
                 item = fetch(ref, out_dir=self._media_tmp)
