@@ -12,6 +12,13 @@ function Write-Log([string]$message) {
     "$(Get-Date -Format o) $message" | Out-File -FilePath $logPath -Append -Encoding utf8
 }
 
+# 单实例：登录触发器与手动启动叠加时，两个看门狗会各自拉起一套 NapCat。
+$mutex = New-Object System.Threading.Mutex($false, 'Global\PaaWatchdog')
+if (-not $mutex.WaitOne(0)) {
+    Write-Log '另一个看门狗已在运行，本次退出'
+    exit 0
+}
+
 while ($true) {
     try {
         $serve = Get-CimInstance Win32_Process -Filter "Name='python.exe'" |
@@ -26,8 +33,9 @@ while ($true) {
             Write-Log "已重新拉起 PAA"
         }
 
-        # NapCat：端口没开、也没有任何 QQ 进程时，触发计划任务（最多 5 分钟一次）
-        $napcatPort = Get-NetTCPConnection -State Listen -LocalPort 3000, 3001 -ErrorAction SilentlyContinue
+        # NapCat：连 WebUI 端口(6099)一起看。只查 3000/3001 会在 OneBot 配置变更时误判成没启动，
+        # 从而反复触发计划任务、叠出多套实例。
+        $napcatPort = Get-NetTCPConnection -State Listen -LocalPort 3000, 3001, 6099 -ErrorAction SilentlyContinue
         $qqProcess = Get-Process QQ -ErrorAction SilentlyContinue
         if (-not $napcatPort -and -not $qqProcess -and
             ((Get-Date) - $lastNapcatAttempt).TotalMinutes -ge 5) {

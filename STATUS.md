@@ -223,3 +223,6 @@
   私网拦截、2MB 上限、真实 MIME、随机文件名）与 `media.quarantine`（收录/去重/日上限 10/总上限 200/晋级/丢弃）；
   `StickerLibrary.add_entry` 支持追加索引；`scripts/sticker_learn.py` 提供 list/promote/reject/stats。
   按「先攒着」策略：只收录、不自动晋级。新增 28 条测试，全量 236 passed。
+- 2026-10-24：运维修复两处。① `watchdog.ps1` 改为单实例互斥（Global 互斥量），并把 NapCat WebUI 端口 6099
+  计入存活判断——之前登录触发器与手动启动会叠出两个看门狗，各自拉起一套 NapCat；OneBot 端口变更时还会被误判成没启动。
+  ② 再次确认本仓库所有 `.ps1` 必须 UTF-8 with BOM（`watchdog.ps1` 被编辑后丢 BOM，语法检查立刻报错）。
