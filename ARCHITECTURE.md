@@ -102,9 +102,9 @@ docs/            设计与运维文档
 | `paa.runtime` | 进程级运行时信息（启动时刻） | 标准库 | `health` |
 | `paa.cli` | 本地 REPL 入口 | `chat`、`memory`、`llm` | 人工 |
 
-## 多模态媒体层（M1 + M1.5 已实现，M2—M4 设计中）
+## 多模态媒体层（M1 / M1.5 / M2 已实现，M3—M4 设计中）
 
-> 状态：**M1 表情包发送、M1.5 学习线已实现并通过测试**；M2/M3/M4 仅有设计。设计文档见 `docs/multimodal/`。
+> 状态：**M1 表情包、M1.5 学习线、M2 图片理解已实现并通过测试**；M3/M4 仅有设计。设计文档见 `docs/multimodal/`。
 > 落地顺序：M1 表情包 → M2 图片理解 → M3 ASR/TTS → M4 唱歌；每个里程碑单独审批。
 
 依赖方向：`adapters` → `qq_service` → `media.router` → `media.providers` → `media.worker_client` → 侧车进程。
@@ -117,7 +117,7 @@ docs/            设计与运维文档
 | `paa.media.quarantine` | 学习线隔离区：收录、去重、配额、晋级/丢弃 | `contracts`、`fetcher`、`stickers`、`providers.sticker_local` | `qq_service`、`scripts/sticker_learn.py` | ✅ M1.5 |
 | `paa.media.store` | sha256、临时目录、长期摘要、TTL | `contracts`、文件系统 | `router`、`fetcher` | 设计 |
 | `paa.media.router` | 能力路由、开关、限频、去重、审计（不碰数据库，审计由入口注入） | `contracts`、providers、`stickers` | `qq_service` | ✅ M1 |
-| `paa.media.providers.*` | Vision / Sticker / ASR / TTS / Music 具体实现 | `contracts`、`worker_client` | `router` | 🚧 仅 `sticker_local` |
+| `paa.media.providers.*` | Vision / Sticker / ASR / TTS / Music 具体实现 | `contracts`、`worker_client` | `router` | 🚧 `sticker_local` + `vision_openai` |
 | `paa.media.worker_client` | 侧车进程协议（NDJSON over stdio），启动/健康/超时/回收 | 标准库 | providers | 设计 |
 | `paa.media.janitor` | 过期临时文件清理 | `store` | `main` 生命周期 | 设计 |
 | `paa.media.stickers` | 素材索引、检索、去重、限频、索引重建 | `contracts`、文件系统 | `router` | ✅ M1 |

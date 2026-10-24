@@ -13,11 +13,22 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-from .contracts import Capability, StickerPick
+from .contracts import Capability, MediaRef, MediaResult, ResultStatus, StickerPick
+from .fetcher import MediaFetchError, fetch
 from .providers.sticker_local import LocalStickerProvider, intent_for
+from .providers.vision_openai import OpenAIVisionProvider
 from .stickers import StickerLibrary, StickerRateLimiter
 
 log = logging.getLogger("paa.media.router")
+
+
+def _denied(capability: Capability, reason: str) -> MediaResult:
+    return MediaResult(
+        status=ResultStatus.DENIED,
+        capability=capability,
+        error_code="E_CONSENT",
+        error_detail=reason,
+    )
 
 # 审计出口：媒体层不碰数据库，由入口层注入一个写库的闭包。
 AuditSink = Callable[..., None]
@@ -31,6 +42,10 @@ class MediaSettings:
     sticker_daily_cap: int = 20
     sticker_recent: int = 5
     sticker_private_only: bool = True
+    # 图片理解（M2）：默认关；egress_allow 为空表示任何图片都不外发
+    vision_enabled: bool = False
+    vision_model: str = ""
+    egress_allow: frozenset[str] = frozenset()
 
 
 @dataclass(frozen=True)
@@ -57,9 +72,15 @@ class MediaRouter:
         audit: AuditSink | None = None,
         clock: Callable[[], float] = time.monotonic,
         rng: random.Random | None = None,
+        vision: OpenAIVisionProvider | None = None,
+        tmp_dir: Path | None = None,
+        max_bytes: int = 2 * 1024 * 1024,
     ) -> None:
         self.settings = settings
         self.library = library
+        self.vision = vision
+        self.tmp_dir = tmp_dir
+        self.max_bytes = max_bytes
         self.provider = provider or LocalStickerProvider(library, rng=rng)
         self.limiter = limiter or StickerRateLimiter(
             cooldown_seconds=settings.sticker_cooldown_sec,
@@ -72,7 +93,73 @@ class MediaRouter:
     def enabled(self, capability: Capability) -> bool:
         if not self.settings.enabled:
             return False
-        return capability is Capability.SELECT_STICKER and self.settings.sticker_enabled
+        if capability is Capability.SELECT_STICKER:
+            return self.settings.sticker_enabled
+        if capability is Capability.ANALYZE_IMAGE:
+            return self.settings.vision_enabled
+        return False
+
+    # ── 图片理解（M2）──────────────────────────────────────────
+    def describe_image(
+        self,
+        ref: MediaRef,
+        *,
+        chat_key: str,
+        actor: str = "",
+        user_text: str = "",
+    ) -> MediaResult:
+        """拉图 → 视觉模型 → 结构化结果。任何失败都返回 MediaResult，不抛异常。"""
+        if not self.settings.enabled or not self.settings.vision_enabled:
+            return _denied(Capability.ANALYZE_IMAGE, "vision_disabled")
+        if "image" not in self.settings.egress_allow:
+            # 默认不外发：图片属于最敏感的一类媒体
+            return _denied(Capability.ANALYZE_IMAGE, "egress_not_allowed")
+        if self.vision is None or not self.vision.available():
+            return MediaResult(
+                status=ResultStatus.FAILED,
+                capability=Capability.ANALYZE_IMAGE,
+                error_code="E_MODEL_UNAVAILABLE",
+            )
+        if self.tmp_dir is None:
+            return MediaResult(
+                status=ResultStatus.FAILED,
+                capability=Capability.ANALYZE_IMAGE,
+                error_code="E_CONFIG",
+            )
+
+        item = None
+        result: MediaResult
+        try:
+            item = fetch(ref, out_dir=self.tmp_dir, max_bytes=self.max_bytes)
+            result = self.vision.analyze_image(item, context_text=user_text)
+        except MediaFetchError as exc:
+            self._emit(actor=actor or chat_key, verdict="denied", detail=exc.code)
+            return MediaResult(
+                status=ResultStatus.REJECTED,
+                capability=Capability.ANALYZE_IMAGE,
+                error_code=exc.code,
+                error_detail=exc.detail,
+            )
+        except Exception as exc:  # noqa: BLE001 - 识别失败不能影响聊天
+            self._emit(actor=actor or chat_key, verdict="failed", detail=str(exc)[:120])
+            return MediaResult(
+                status=ResultStatus.FAILED,
+                capability=Capability.ANALYZE_IMAGE,
+                error_code="E_PROVIDER",
+                error_detail=str(exc)[:120],
+            )
+        finally:
+            if item is not None:
+                item.local_path.unlink(missing_ok=True)
+
+        verdict = "allowed" if result.status is ResultStatus.OK else "failed"
+        self._emit(
+            actor=actor or chat_key,
+            verdict=verdict,
+            sha256=getattr(item, "sha256", "") or "",
+            detail="vision status=" + result.status.value + " code=" + result.error_code,
+        )
+        return result
 
     def sticker_for(
         self,

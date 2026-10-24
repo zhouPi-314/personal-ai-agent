@@ -22,7 +22,9 @@ from .config import PROJECT_ROOT, Settings
 from .db import session_scope
 from .llm import BrainRouter
 from .logging import get_logger
+from .media.context import format_image_block
 from .media.fetcher import fetch
+from .media.providers.vision_openai import OpenAIVisionProvider
 from .media.quarantine import Quarantine
 from .media.router import MediaRouter, MediaSettings
 from .media.stickers import StickerLibrary
@@ -65,6 +67,7 @@ class QqService:
             respond=self.respond,
             owner_ids=frozenset({settings.owner_qq}) if settings.owner_qq else frozenset(),
         )
+        self._media_tmp = PROJECT_ROOT / "data" / "media" / "tmp"
         self.media = MediaRouter(
             settings=MediaSettings(
                 enabled=settings.media_enabled,
@@ -73,6 +76,13 @@ class QqService:
                 sticker_daily_cap=settings.media_sticker_daily_cap,
                 sticker_recent=settings.media_sticker_recent,
                 sticker_private_only=settings.media_sticker_private_only,
+                vision_enabled=settings.media_vision_enabled,
+                vision_model=settings.media_vision_model,
+                egress_allow=frozenset(
+                    item.strip()
+                    for item in (settings.media_egress_allow or "").split(",")
+                    if item.strip()
+                ),
             ),
             # 总开关关闭时连素材库都不读：默认配置下零磁盘 I/O
             library=(
@@ -81,13 +91,22 @@ class QqService:
                 else StickerLibrary()
             ),
             audit=self._audit_media,
+            vision=(
+                OpenAIVisionProvider(
+                    base_url=settings.model_base_url,
+                    api_key=settings.model_api_key,
+                    model=settings.media_vision_model,
+                )
+                if settings.media_vision_enabled
+                else None
+            ),
+            tmp_dir=self._media_tmp,
         )
         self.quarantine = Quarantine(
             PROJECT_ROOT / settings.media_quarantine_dir,
             daily_cap=settings.media_learn_daily_cap,
             total_cap=settings.media_learn_total_cap,
         )
-        self._media_tmp = PROJECT_ROOT / "data" / "media" / "tmp"
         self._learn_tasks: set[asyncio.Task] = set()
         self._task: asyncio.Task | None = None
         self._stop: asyncio.Event | None = None
@@ -140,10 +159,12 @@ class QqService:
                 )
                 return [OutgoingPart(text="今天聊得有点多了，我先歇会儿，明天再找你。")]
 
+        prompt_text = await self._with_image_context(message)
+
         def _run():
             with session_scope() as db:
                 return session.ask(
-                    message.text,
+                    prompt_text,
                     memory=MemoryService(db),
                     store=MessageStore(db),
                     usage=UsageService(db),
@@ -153,7 +174,8 @@ class QqService:
         hour = datetime.now().hour
         decision = self.media.sticker_for(
             chat_key=message.chat_key,
-            reply_text=result.reply,
+            # 用户自己的话优先：模型回复常常是平铺直叙的，只按回复判情绪会长期 no_intent
+            reply_text=f"{message.text}\n{result.reply}",
             day=datetime.now().strftime("%Y-%m-%d"),
             actor=f"qq:{message.sender_id}",
             is_group=message.is_group,
@@ -180,6 +202,33 @@ class QqService:
             },
         )
         return parts
+
+    # ── 图片理解（M2）─────────────────────────────────────────
+    async def _with_image_context(self, message: InboundMessage) -> str:
+        """把图片理解结果拼成"数据区"文本；关掉视觉时行为与以前一致。"""
+        if not self.settings.media_vision_enabled or not message.media:
+            return message.text
+        result = await asyncio.to_thread(
+            self.media.describe_image,
+            message.media[0],
+            chat_key=message.chat_key,
+            actor=f"qq:{message.sender_id}",
+            user_text=message.text,
+        )
+        self.log.info(
+            "图片理解",
+            extra={
+                "fields": {
+                    "chat": message.chat_key,
+                    "status": result.status.value,
+                    "code": result.error_code,
+                }
+            },
+        )
+        block = format_image_block(result)
+        if message.text:
+            return block + "\n【用户同时说】" + message.text
+        return block
 
     # ── 学习线（M1.5）─────────────────────────────────────────
     def _should_learn(self, message: InboundMessage) -> bool:

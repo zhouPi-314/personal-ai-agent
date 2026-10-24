@@ -112,6 +112,15 @@ def test_empty_library_returns_empty_library():
     assert router.sticker_for(chat_key="c", reply_text="哈哈", day="d").reason == "empty_library"
 
 
+def test_user_text_alone_can_drive_intent():
+    # 组合文本（用户话在前）里带情绪词就应命中，哪怕模型回复很平淡
+    router = _router()
+    decision = router.sticker_for(
+        chat_key="private:1", reply_text="哈哈哈\n嗯，我在", day="d"
+    )
+    assert decision.ok and decision.tag == "开心"
+
+
 def test_group_is_blocked_by_default():
     decision = _router().sticker_for(
         chat_key="group:1", reply_text="哈哈", day="d", is_group=True

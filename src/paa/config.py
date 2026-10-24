@@ -65,6 +65,11 @@ class Settings(BaseSettings):
     media_learn_daily_cap: int = 10
     media_learn_total_cap: int = 200
 
+    # 图片理解（M2）：默认关；egress_allow 为空表示不外发任何图片
+    media_vision_enabled: bool = False
+    media_vision_model: str = "Qwen/Qwen3-VL-8B-Instruct"
+    media_egress_allow: str = ""  # 逗号分隔，例如 image
+
 
 @lru_cache
 def get_settings() -> Settings:
