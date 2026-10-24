@@ -29,6 +29,10 @@ persona.md
 id_rsa*
 id_ed25519*
 
+# 本地临时产物（只在仓库根）
+/*.out
+/*.err
+
 # 工具缓存
 .pytest_cache/
 .ruff_cache/

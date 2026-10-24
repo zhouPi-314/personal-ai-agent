@@ -55,6 +55,27 @@ class MediaResult:
 
 
 @dataclass(frozen=True)
+class MediaRef:
+    """入站媒体的最小描述：只描述位置，不持有字节，也不可信。"""
+
+    kind: str  # image / sticker
+    source: str  # url / file / base64
+    locator: str
+    name: str = ""
+
+
+@dataclass(frozen=True)
+class MediaInput:
+    """已通过校验、落在本地临时目录的媒体。"""
+
+    ref: MediaRef
+    local_path: Path
+    mime: str
+    size_bytes: int
+    sha256: str
+
+
+@dataclass(frozen=True)
 class StickerPick:
     """一次表情包选择的结果：只描述，不持有字节。"""
 

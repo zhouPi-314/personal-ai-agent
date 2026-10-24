@@ -59,6 +59,12 @@ class Settings(BaseSettings):
     # 先只私聊；群聊接口预留，打开群场景也仍需 owner/被 @ 才唤醒
     media_sticker_private_only: bool = True
 
+    # 学习线（M1.5）：只收主人私聊里的图，先进隔离区，人工晋级后才可发送
+    media_learn_enabled: bool = False
+    media_quarantine_dir: str = "data/media/quarantine"
+    media_learn_daily_cap: int = 10
+    media_learn_total_cap: int = 200
+
 
 @lru_cache
 def get_settings() -> Settings:

@@ -119,6 +119,52 @@ class StickerLibrary:
         return cls(tuple(entries))
 
     @classmethod
+    def add_entry(
+        cls,
+        root: Path | str,
+        *,
+        file_rel: str,
+        tag: str,
+        sha256: str,
+        source_url: str,
+        license: str,
+        captured_at: str,
+    ) -> bool:
+        """向索引追加一条（学习线晋级用）。已存在同一哈希则不动。"""
+        if not license.strip():
+            raise ValueError("license 不能为空")
+        base = Path(root).resolve()
+        index_path = base / INDEX_NAME
+        payload: dict[str, object] = {"version": 1, "entries": []}
+        if index_path.is_file():
+            try:
+                loaded = json.loads(index_path.read_text(encoding="utf-8"))
+                if isinstance(loaded, dict) and isinstance(loaded.get("entries"), list):
+                    payload = loaded
+            except (OSError, json.JSONDecodeError) as exc:
+                log.warning("索引无法解析，将重建：%s", exc)
+
+        entries = list(payload["entries"])  # type: ignore[arg-type]
+        if any(str(item.get("sha256") or "") == sha256 for item in entries if isinstance(item, dict)):
+            return False
+
+        entries.append(
+            {
+                "file": file_rel,
+                "tag": tag,
+                "sha256": sha256,
+                "source_url": source_url,
+                "license": license,
+                "captured_at": captured_at,
+            }
+        )
+        payload["entries"] = entries
+        tmp = index_path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        tmp.replace(index_path)
+        return True
+
+    @classmethod
     def rebuild_index(
         cls,
         root: Path | str,

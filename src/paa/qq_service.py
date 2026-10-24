@@ -22,6 +22,8 @@ from .config import PROJECT_ROOT, Settings
 from .db import session_scope
 from .llm import BrainRouter
 from .logging import get_logger
+from .media.fetcher import fetch
+from .media.quarantine import Quarantine
 from .media.router import MediaRouter, MediaSettings
 from .media.stickers import StickerLibrary
 from .memory import MemoryService
@@ -80,6 +82,13 @@ class QqService:
             ),
             audit=self._audit_media,
         )
+        self.quarantine = Quarantine(
+            PROJECT_ROOT / settings.media_quarantine_dir,
+            daily_cap=settings.media_learn_daily_cap,
+            total_cap=settings.media_learn_total_cap,
+        )
+        self._media_tmp = PROJECT_ROOT / "data" / "media" / "tmp"
+        self._learn_tasks: set[asyncio.Task] = set()
         self._task: asyncio.Task | None = None
         self._stop: asyncio.Event | None = None
         self.log = get_logger("paa.qq")
@@ -167,7 +176,61 @@ class QqService:
                 }
             },
         )
+        self._spawn_learn(message)
         return parts
+
+    # ── 学习线（M1.5）─────────────────────────────────────────
+    def _should_learn(self, message: InboundMessage) -> bool:
+        if not self.settings.media_learn_enabled or message.is_group:
+            return False
+        if not message.media:
+            return False
+        owner = self.settings.owner_qq
+        if not owner or message.sender_id != owner:
+            return False  # 只学主人自己发的
+        return message.sender_id != self.settings.onebot_self_id
+
+    def _spawn_learn(self, message: InboundMessage) -> None:
+        """旁路收录，不阻塞回复；任何异常只记日志。"""
+        if not self._should_learn(message):
+            return
+        task = asyncio.create_task(asyncio.to_thread(self._learn_sync, message))
+        self._learn_tasks.add(task)
+        task.add_done_callback(self._learn_tasks.discard)
+
+    def _learn_sync(self, message: InboundMessage) -> None:
+        from .media.fetcher import MediaFetchError
+
+        for ref in message.media[:3]:
+            item = None
+            try:
+                item = fetch(ref, out_dir=self._media_tmp)
+                status, reason = self.quarantine.offer(
+                    item,
+                    actor=f"qq:{message.sender_id}",
+                    chat_key=message.chat_key,
+                    context_text=message.text,
+                )
+                self.log.info(
+                    "学习线收录",
+                    extra={
+                        "fields": {
+                            "chat": message.chat_key,
+                            "mime": item.mime,
+                            "bytes": item.size_bytes,
+                            "status": status,
+                            "reason": reason,
+                            "tag_guess": "",
+                        }
+                    },
+                )
+            except MediaFetchError as exc:
+                self.log.warning("学习线跳过：%s", exc.code)
+            except Exception as exc:  # noqa: BLE001 - 学习失败不能影响聊天
+                self.log.warning("学习线异常：%s", exc)
+            finally:
+                if item is not None:
+                    item.local_path.unlink(missing_ok=True)
 
     def _audit_media(self, **payload: object) -> None:
         """媒体动作留痕。写库失败只告警：审计不能反向阻断聊天。"""

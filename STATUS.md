@@ -33,6 +33,7 @@
 | 多模态 B | 接口设计（架构 / Provider 契约 / 安全 / 测试计划） | 100% | ✅ 文档完成，零代码 |
 | 多模态 C | M1 表情包发送（素材库/开关/限频/去重/审计/降级） | 100% | ✅ 代码+测试 |
 | 多模态 C2 | 素材库（39 张，MIT）+ 私聊限制 + pre-commit 修复 | 100% | ✅ |
+| 多模态 M1.5 | 学习线：从聊天收录表情包，隔离区 + 人工晋级 | 100% | ✅ 代码+测试，默认只收不自动入库 |
 | 多模态 D—F | 图片理解 → 语音 → 唱歌 | 0% | ⬜ 逐个单独审批 |
 
 ## 阶段 0 · 环境与边界 ✅
@@ -164,6 +165,9 @@
 | 2026-10-24 | A-02 基线核验：`git status` 干净、`pytest` 153 passed、`ruff` 1 处遗留错误（已修） | ✅ 补齐空洞 |
 | 2026-10-24 | 多模态阶段 C（M1）：CQ 转义、消息段数组、素材库、媒体路由器、审计、降级 | ✅ 205 passed / ruff 全绿 |
 | 2026-10-24 | C2：采集 39 张 Fluent Emoji（MIT）、生成索引、加私聊限制、修 pre-commit 钩子 | ✅ 208 passed / 钩子实跑通过 |
+| 2026-10-24 | 真机发送验证：39 张库 → base64 段 → QQ 私聊收到图片 | ✅ 通过（用户确认收到） |
+| 2026-10-24 | 事故：重启后 `PAA_HOST` 绑的是 Tailscale 地址，VPN 掉线导致崩溃循环 | ✅ 已改 127.0.0.1 并拉起（D41） |
+| 2026-10-24 | M1.5 学习线：入站媒体解析、拉取守卫、隔离区、人工晋级 CLI | ✅ 236 passed / ruff 全绿 |
 
 ## 变更记录
 
@@ -210,3 +214,12 @@
 - 2026-10-24：修 pre-commit 的 secret-scan 钩子：本机没有 `pwsh`，改为 `powershell -NoProfile -ExecutionPolicy Bypass -File`；
   同时修正 `scripts/secret-scan.ps1` 丢失的 UTF-8 BOM（无 BOM 时 PS 5.1 会把排除规则整段吞掉）。
   `pre-commit run --all-files` 两个钩子均通过（exit 0），AGENTS/CONTRIBUTING/SECURITY 的用法说明同步更新。
+- 2026-10-24：真机发送验证通过。`scripts/smoke_sticker.py --send` 经 NapCat 向主人私聊发送 41KB PNG，用户确认收到；
+  失败路径同样验证过（NapCat 未开时返回 ConnectError，不抛栈、不影响其他进程）。
+- 2026-10-24：事故与修复。为启用媒体开关重启 PAA 后发现 `PAA_HOST` 绑定的是 Tailscale 地址
+  在 Tailscale NoState 时无法绑定，服务 6 秒一次崩溃重启、QQ 机器人离线。经用户批准改为 `127.0.0.1`，
+  服务恢复（healthz 200 / ok / qq_enabled=true）。这是既有配置耦合，不是本次代码缺陷。
+- 2026-10-24：M1.5 学习线落地。入站 image/mface 解析为 `MediaRef`；新增 `media.fetcher`（协议白名单、
+  私网拦截、2MB 上限、真实 MIME、随机文件名）与 `media.quarantine`（收录/去重/日上限 10/总上限 200/晋级/丢弃）；
+  `StickerLibrary.add_entry` 支持追加索引；`scripts/sticker_learn.py` 提供 list/promote/reject/stats。
+  按「先攒着」策略：只收录、不自动晋级。新增 28 条测试，全量 236 passed。

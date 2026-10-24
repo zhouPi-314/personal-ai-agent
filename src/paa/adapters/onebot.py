@@ -13,6 +13,8 @@ from typing import Any
 
 import httpx
 
+from ..media.contracts import MediaRef
+
 MAX_SEGMENTS = 5
 MAX_IMAGE_BYTES = 8 * 1024 * 1024
 
@@ -29,6 +31,29 @@ class InboundMessage:
     is_group: bool = False
     is_at_me: bool = False
     is_poke: bool = False
+    # 入站媒体：只描述位置，不下载、不校验（那是 media 层的事）
+    media: tuple[MediaRef, ...] = ()
+
+
+def _media_ref(segment: dict[str, Any]) -> MediaRef | None:
+    """把 image/mface 段翻成 MediaRef；拿不到可定位的来源就放弃。"""
+    kind = segment.get("type")
+    if kind not in {"image", "mface"}:
+        return None
+    data = segment.get("data") or {}
+    url = str(data.get("url") or "").strip()
+    name = str(data.get("file") or "").strip()
+    media_kind = "image" if kind == "image" else "sticker"
+
+    if url.lower().startswith(("http://", "https://")):
+        return MediaRef(kind=media_kind, source="url", locator=url, name=name)
+    if name.lower().startswith("base64://"):
+        return MediaRef(kind=media_kind, source="base64", locator=name[len("base64://") :], name=name)
+    if name.lower().startswith("file://"):
+        return MediaRef(kind=media_kind, source="file", locator=name[len("file://") :], name=name)
+    if len(name) > 2 and name[1] == ":" and name[2] in "\\/":
+        return MediaRef(kind=media_kind, source="file", locator=name, name=name)
+    return None
 
 
 def escape_cq(text: str) -> str:
@@ -66,7 +91,7 @@ def _segments_to_text(segments: Any) -> str:
             parts.append(str(data.get("text") or ""))
         elif kind == "image":
             parts.append("[图片]")
-        elif kind == "face":
+        elif kind in {"face", "mface"}:
             parts.append("[表情]")
         elif kind == "at":
             parts.append(f"@{data.get('qq')}")
@@ -107,6 +132,16 @@ def parse_event(payload: dict[str, Any], *, self_id: str | None = None) -> Inbou
     text = _segments_to_text(segments)
     user_id = str(payload.get("user_id") or "")
 
+    media = tuple(
+        ref
+        for ref in (
+            _media_ref(seg)
+            for seg in (segments if isinstance(segments, list) else [])
+            if isinstance(seg, dict)
+        )
+        if ref is not None
+    )
+
     is_at_me = any(
         isinstance(seg, dict)
         and seg.get("type") == "at"
@@ -131,6 +166,7 @@ def parse_event(payload: dict[str, Any], *, self_id: str | None = None) -> Inbou
         sender_name=str(sender.get("card") or sender.get("nickname") or ""),
         is_group=is_group,
         is_at_me=is_at_me,
+        media=media,
     )
 
 

@@ -102,9 +102,9 @@ docs/            设计与运维文档
 | `paa.runtime` | 进程级运行时信息（启动时刻） | 标准库 | `health` |
 | `paa.cli` | 本地 REPL 入口 | `chat`、`memory`、`llm` | 人工 |
 
-## 多模态媒体层（M1 已实现，M2—M4 设计中）
+## 多模态媒体层（M1 + M1.5 已实现，M2—M4 设计中）
 
-> 状态：**M1 表情包发送已实现并通过测试**；M2/M3/M4 仅有设计。设计文档见 `docs/multimodal/`。
+> 状态：**M1 表情包发送、M1.5 学习线已实现并通过测试**；M2/M3/M4 仅有设计。设计文档见 `docs/multimodal/`。
 > 落地顺序：M1 表情包 → M2 图片理解 → M3 ASR/TTS → M4 唱歌；每个里程碑单独审批。
 
 依赖方向：`adapters` → `qq_service` → `media.router` → `media.providers` → `media.worker_client` → 侧车进程。
@@ -113,7 +113,8 @@ docs/            设计与运维文档
 | 模块 | 职责 | 依赖 | 被谁依赖 | 状态 |
 |---|---|---|---|---|
 | `paa.media.contracts` | 媒体数据契约（Capability / MediaResult / StickerPick） | 无 | 全部 media 模块、`qq_service` | ✅ M1 |
-| `paa.media.fetcher` | 拉取与隔离校验（协议白名单、MIME、大小/时长/像素上限、SSRF、随机文件名） | `contracts`、标准库 | `router` | 设计 |
+| `paa.media.fetcher` | 拉取与隔离校验（协议白名单、MIME、大小、SSRF、随机文件名） | `contracts`、`httpx` | `quarantine`、`router` | ✅ M1.5 |
+| `paa.media.quarantine` | 学习线隔离区：收录、去重、配额、晋级/丢弃 | `contracts`、`fetcher`、`stickers`、`providers.sticker_local` | `qq_service`、`scripts/sticker_learn.py` | ✅ M1.5 |
 | `paa.media.store` | sha256、临时目录、长期摘要、TTL | `contracts`、文件系统 | `router`、`fetcher` | 设计 |
 | `paa.media.router` | 能力路由、开关、限频、去重、审计（不碰数据库，审计由入口注入） | `contracts`、providers、`stickers` | `qq_service` | ✅ M1 |
 | `paa.media.providers.*` | Vision / Sticker / ASR / TTS / Music 具体实现 | `contracts`、`worker_client` | `router` | 🚧 仅 `sticker_local` |
