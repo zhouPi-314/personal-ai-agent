@@ -11,7 +11,7 @@
 | 侧车位置 | `runtime\python312\`（官方 embeddable，11MB，免安装、不动系统、不进仓库） |
 | ASR 运行时 | `sherpa-onnx 2.0.0`（Apache-2.0，单 wheel 16.6MB） |
 | ASR 模型 | SenseVoiceSmall **int8** 228MB + tokens 0.3MB（HuggingFace `csukuangfj/sherpa-onnx-sense-voice-...-2024-07-17`） |
-| ffmpeg | **未安装**（AMR 解码需要它，见 §4） |
+| ffmpeg | **9.0.2 essentials**（`runtime\ffmpeg`，~99MB），含原生 `amrnb` 解码与 `libopencore_amrnb` 编码 |
 
 ## 2. CPU 基准（真实测量）
 
@@ -37,7 +37,21 @@ work/                  临时测试音频（已 .gitignore）
 
 侧车与主进程**互不 import**：主进程只通过 NDJSON 协议调用（阶段 E 后续落地）。
 
-## 4. 尚未解决：AMR 解码
+## 4. AMR 解码（已解决）
+
+用 ffmpeg 把 WAV 编成真 AMR，再走完整链路（ffmpeg → 16k WAV → 侧车 → SenseVoice）：
+
+| 指标 | 值 |
+|---|---|
+| 输入 | 5.7s AMR-NB（8.9KB，12.2kbps） |
+| **端到端耗时** | **2.28 s**（含 ffmpeg + 子进程启动 + 模型加载 1.7s） |
+| 其中解码 | 197 ms |
+| 转写结果 | `你好，今天天气真不错，我们一起出去走走吧。` ✅ 与原文一致 |
+
+> 踩坑记录：子进程 stdout 被重定向时 Python 默认用 cp936，中文输出会变 GBK，主进程按 UTF-8 解就是乱码。
+> `worker_client` 现在强制 `PYTHONIOENCODING=utf-8` + `PYTHONUTF8=1`，并有测试盯着。
+
+原始设计里的备选：
 
 QQ 语音是 AMR-NB，SenseVoice 要 16kHz 单声道 WAV。两条路：
 

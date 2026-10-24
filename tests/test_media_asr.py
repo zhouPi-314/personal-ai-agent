@@ -88,6 +88,9 @@ def test_worker_parses_ok(tmp_path: Path, monkeypatch):
 
     def fake(argv, **kwargs):
         assert kwargs["input"].endswith(b"\n")
+        # 必须强制子进程 UTF-8，否则中文 Windows 上输出是 GBK
+        assert kwargs["env"]["PYTHONIOENCODING"] == "utf-8"
+        assert kwargs["env"]["PYTHONUTF8"] == "1"
         return SimpleNamespace(
             returncode=0,
             stdout=json.dumps({"status": "ok", "text": "你好"}, ensure_ascii=False).encode(),

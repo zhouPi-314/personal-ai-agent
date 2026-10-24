@@ -35,7 +35,7 @@
 | 多模态 C2 | 素材库（39 张，MIT）+ 私聊限制 + pre-commit 修复 | 100% | ✅ |
 | 多模态 M1.5 | 学习线：从聊天收录表情包，隔离区 + 人工晋级 | 100% | ✅ 代码+测试，默认只收不自动入库 |
 | 多模态 D (M2) | 图片理解：云端视觉 + 外发闸门 + 注入边界 | 100% | ✅ 代码+测试，待真机 |
-| 多模态 E (M3) | 语音：ASR 侧车已装并实测（CPU，RTF 0.03）；TTS/链路未接 | 40% | 🚧 |
+| 多模态 E (M3) | 语音：ASR 侧车 + ffmpeg + 端到端（AMR→文字）已通；TTS 未做 | 70% | 🚧 |
 | 多模态 F | 唱歌 | 0% | ⬜ 未开始 |
 
 ## 阶段 0 · 环境与边界 ✅
@@ -175,6 +175,7 @@
 | 2026-10-24 | 修表情包不发：判定只看模型回复，回复平淡就永远 no_intent | ✅ 改为用户话优先组合判定 |
 | 2026-10-24 | 阶段 D（M2）：云端视觉 Provider、外发闸门、数据区隔离、注入测试 | ✅ 250 passed / ruff 全绿 |
 | 2026-10-24 | 阶段 E 开工：摸清 QQ 语音是 `.amr`；装便携 Python 3.12 + sherpa-onnx + SenseVoice | ✅ 实测 RTF 0.03 |
+| 2026-10-24 | 装 ffmpeg 9.0.2；端到端 AMR→文字 2.28s（5.7s 音频），转写完全正确 | ✅ |
 | 2026-10-24 | 修 bug：语音消息被误送去图片理解/学习线（E_MIME_MISMATCH） | ✅ 按 media.kind 过滤 |
 
 ## 变更记录
@@ -253,3 +254,8 @@
   （`runtime\python312`，免安装不动系统），装 `sherpa-onnx 2.0.0` + SenseVoiceSmall int8（228MB）。
   SAPI 合成 5.69s 中文语音实测：加载 1.66s、解码 194ms、RTF 0.03、转写与原文完全一致。
   同时修掉一个 bug：语音消息曾被当作图片送进视觉与学习线（日志 E_MIME_MISMATCH），现按 kind 过滤。
+- 2026-10-24：装 ffmpeg 9.0.2 essentials（`runtime\ffmpeg`，99MB，含原生 amrnb 解码/编码），落地 ASR 全链路：
+  `media.audio`（参数数组调用 ffmpeg，转 16k 单声道）、`media.worker_client`（一次性侧车 + 强制 UTF-8）、
+  `providers.asr_sidecar`、`MediaRouter.transcribe_audio`（闸门+审计）、QQ 路径接入语音。
+  端到端实测：5.7s AMR → 2.28s → 文字完全正确；新增 14 条测试，265 passed。
+  踩坑：子进程 stdout 重定向时 Python 用 cp936，中文变 GBK 乱码，已强制 PYTHONIOENCODING/PYTHONUTF8。

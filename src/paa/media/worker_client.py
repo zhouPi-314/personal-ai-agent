@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from pathlib import Path
 
@@ -34,6 +35,11 @@ def call_worker(
         raise WorkerError("E_WORKER_MISSING", str(script))
 
     request = json.dumps(payload, ensure_ascii=False) + "\n"
+    # 子进程 stdout 被重定向时，Python 默认用系统代码页（中文 Windows 是 cp936），
+    # 会把中文输出写成 GBK，主进程按 UTF-8 解就是乱码。必须强制 UTF-8。
+    env = os.environ.copy()
+    env["PYTHONIOENCODING"] = "utf-8"
+    env["PYTHONUTF8"] = "1"
     try:
         completed = subprocess.run(
             [str(python_exe), str(script)],
@@ -41,6 +47,7 @@ def call_worker(
             capture_output=True,
             timeout=timeout,
             check=False,
+            env=env,
         )
     except subprocess.TimeoutExpired as exc:
         raise WorkerError("E_TIMEOUT", "侧车超时") from exc
