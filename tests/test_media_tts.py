@@ -12,12 +12,14 @@ from paa.adapters.onebot import OneBotSender
 from paa.adapters.runner import OneBotRunner
 from paa.chat.humanize import OutgoingMedia
 from paa.media.contracts import ResultStatus
-from paa.media.providers import tts_sapi
+from paa.media.providers import tts_kokoro, tts_sapi
+from paa.media.providers.tts_kokoro import KokoroTTSProvider
 from paa.media.providers.tts_sapi import SapiTTSProvider
 from paa.media.router import MediaRouter, MediaSettings
 from paa.media.stickers import StickerLibrary
 
 WAV = b"RIFF" + b"\x00\x00\x00\x00" + b"WAVE" + b"\x00" * 2048
+BIG_WAV = b"RIFF" + b"\x00\x00\x00\x00" + b"WAVE" + b"\x00" * 8192
 
 
 def _provider(tmp_path: Path, **kwargs) -> SapiTTSProvider:
@@ -195,6 +197,77 @@ async def test_runner_voice_failure_falls_back_to_text():
 
 
 # ── 闸门 ─────────────────────────────────────────────────────
+# ── Kokoro Provider ─────────────────────────────────────────
+def _kokoro(tmp_path: Path, **kwargs) -> KokoroTTSProvider:
+    model_dir = tmp_path / "kokoro"
+    model_dir.mkdir()
+    (model_dir / "model_int8.onnx").write_bytes(b"m")
+    (model_dir / "tokenizer.json").write_text("{}", encoding="utf-8")
+    (model_dir / "zf_001.bin").write_bytes(b"v")
+    py = tmp_path / "python.exe"
+    py.write_bytes(b"bin")
+    script = tmp_path / "kokoro_worker.py"
+    script.write_text("# stub", encoding="utf-8")
+    return KokoroTTSProvider(
+        python_exe=py, worker_script=script, model_dir=model_dir, **kwargs
+    )
+
+
+def test_kokoro_available_when_files_present(tmp_path: Path):
+    assert _kokoro(tmp_path).available() is True
+
+
+def test_kokoro_unavailable_without_model(tmp_path: Path):
+    provider = _kokoro(tmp_path)
+    (provider.model_dir / "model_int8.onnx").unlink()
+    assert provider.available() is False
+
+
+def test_kokoro_success_returns_wav(tmp_path: Path, monkeypatch):
+    provider = _kokoro(tmp_path)
+    out_dir = tmp_path / "out"
+
+    def fake_worker(*, payload, **kwargs):
+        Path(payload["out_wav"]).parent.mkdir(parents=True, exist_ok=True)
+        Path(payload["out_wav"]).write_bytes(BIG_WAV)
+        return {"status": "ok", "seconds": 1.5, "tts_ms": 120}
+
+    monkeypatch.setattr(tts_kokoro, "call_worker", fake_worker)
+    result = provider.synthesize_speech("你好", out_dir=out_dir)
+
+    assert result.status is ResultStatus.OK
+    assert Path(str(result.data["path"])).is_file()
+    assert result.data["seconds"] == 1.5
+
+
+def test_kokoro_worker_error_is_failed(tmp_path: Path, monkeypatch):
+    provider = _kokoro(tmp_path)
+
+    def boom(**kwargs):
+        raise tts_kokoro.WorkerError("E_WORKER", "bad")
+
+    monkeypatch.setattr(tts_kokoro, "call_worker", boom)
+    result = provider.synthesize_speech("你好", out_dir=tmp_path / "o")
+    assert result.status is ResultStatus.FAILED
+    assert result.error_code == "E_WORKER"
+
+
+def test_kokoro_truncates(tmp_path: Path, monkeypatch):
+    provider = _kokoro(tmp_path, max_chars=3)
+    captured: dict = {}
+
+    def fake_worker(*, payload, **kwargs):
+        captured["text"] = payload["text"]
+        Path(payload["out_wav"]).parent.mkdir(parents=True, exist_ok=True)
+        Path(payload["out_wav"]).write_bytes(BIG_WAV)
+        return {"status": "ok", "seconds": 0.5}
+
+    monkeypatch.setattr(tts_kokoro, "call_worker", fake_worker)
+    result = provider.synthesize_speech("一二三四五", out_dir=tmp_path / "o")
+    assert captured["text"] == "一二三"
+    assert result.data["truncated"] is True
+
+
 def test_router_tts_disabled_is_denied(tmp_path: Path):
     router = MediaRouter(
         settings=MediaSettings(enabled=True, tts_enabled=False),

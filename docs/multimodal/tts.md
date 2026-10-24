@@ -50,3 +50,27 @@
 - 接入方式与 ASR 相同：独立侧车，主进程只经 NDJSON 调用。
 
 切换前需要你先听 SAPI 的效果，确认「值得为音色多装 330MB」。
+## 7. Kokoro 已接入（2026-10-24）
+
+| 项 | 值 |
+|---|---|
+| 模型 | onnx-community/Kokoro-82M-v1.1-zh-ONNX（**Apache-2.0**），`models/kokoro/` |
+| 体积 | fp32 `model.onnx` 326MB + tokenizer + 中文音色 `zf_001/zf_002` |
+| G2P | `misaki[zh]==0.9.4` 的 `ZHG2P(version="1.1")`，输出**注音符号**（覆盖率 100%） |
+| 运行时 | 侧车 Python 3.12 + onnxruntime（CPU），主进程零依赖 |
+
+### 关键实测
+
+| 配置 | 语音时长 | 合成耗时 | 结论 |
+|---|---|---|---|
+| int8 `model_int8.onnx` | 2.92 s | **5652 ms** | 本机反而慢 8 倍 |
+| **fp32 `model.onnx`** | 2.92 s | **714 ms** | ✅ 默认用它 |
+| fp32（长句） | 5.7 s | 1461 ms | 约 4 倍实时 |
+
+**质量验证**：把 Kokoro 合成的语音再喂回 SenseVoice，转写结果与原文**逐字一致**——说明发音正确、可懂。
+
+### 踩过的坑
+
+1. `misaki` 的 `zh` 模块要用 `version="1.1"`（注音），默认版本输出 IPA，与模型词表对不上（丢 24% 音素，念出来是乱的）。
+2. `pip install "misaki[zh]"` 会解析到 0.3.0 并拖进 **torch + spacy**（950MB）；显式装 `misaki[zh]==0.9.4` 后只有 368MB。
+3. `tokenizer.json` 用 `tokenizers` 库加载会报错，直接读 JSON 的 `model.vocab` 更稳。

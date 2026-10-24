@@ -82,6 +82,12 @@ class Settings(BaseSettings):
     media_tts_mode: str = "voice_input"
     media_tts_voice: str = "Microsoft Huihui Desktop"
     media_tts_max_chars: int = 150
+    # 合成引擎：kokoro（自然，CPU 较慢）/ sapi（快，机器音）
+    media_tts_provider: str = "kokoro"
+    media_tts_kokoro_voice: str = "zf_001"
+    media_tts_kokoro_model: str = "model.onnx"  # fp32 在本机比 int8 快 8 倍
+    media_tts_kokoro_dir: str = "models/kokoro"
+    media_tts_kokoro_worker: str = "scripts/tts_kokoro_worker.py"
 
 
 @lru_cache

@@ -27,6 +27,7 @@ from .media.context import format_image_block
 from .media.contracts import ResultStatus
 from .media.fetcher import fetch
 from .media.providers.asr_sidecar import ASRSidecarProvider
+from .media.providers.tts_kokoro import KokoroTTSProvider
 from .media.providers.tts_sapi import SapiTTSProvider
 from .media.providers.vision_openai import OpenAIVisionProvider
 from .media.quarantine import Quarantine
@@ -117,15 +118,7 @@ class QqService:
                 if settings.media_asr_enabled
                 else None
             ),
-            tts=(
-                SapiTTSProvider(
-                    script=PROJECT_ROOT / "scripts" / "tts_sapi.ps1",
-                    voice=settings.media_tts_voice,
-                    max_chars=settings.media_tts_max_chars,
-                )
-                if settings.media_tts_enabled
-                else None
-            ),
+            tts=(self._build_tts(settings) if settings.media_tts_enabled else None),
         )
         self.quarantine = Quarantine(
             PROJECT_ROOT / settings.media_quarantine_dir,
@@ -271,6 +264,26 @@ class QqService:
             },
         )
         return parts
+
+    @staticmethod
+    def _build_tts(settings: Settings):
+        """按配置选合成引擎；Kokoro 不可用时自动退回 SAPI。"""
+        sapi = SapiTTSProvider(
+            script=PROJECT_ROOT / "scripts" / "tts_sapi.ps1",
+            voice=settings.media_tts_voice,
+            max_chars=settings.media_tts_max_chars,
+        )
+        if (settings.media_tts_provider or "kokoro").strip().lower() == "sapi":
+            return sapi
+        kokoro = KokoroTTSProvider(
+            python_exe=PROJECT_ROOT / settings.media_asr_python,
+            worker_script=PROJECT_ROOT / settings.media_tts_kokoro_worker,
+            model_dir=PROJECT_ROOT / settings.media_tts_kokoro_dir,
+            voice=settings.media_tts_kokoro_voice,
+            model_file=settings.media_tts_kokoro_model,
+            max_chars=settings.media_tts_max_chars,
+        )
+        return kokoro if kokoro.available() else sapi
 
     def _should_speak(self, message: InboundMessage) -> bool:
         if not self.settings.media_tts_enabled:
