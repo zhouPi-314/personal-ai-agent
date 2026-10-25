@@ -5,9 +5,10 @@
 
 from __future__ import annotations
 
+import json
 import uuid
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response
 from sqlalchemy import func, select
 
 from .config import PROJECT_ROOT, get_settings
@@ -22,6 +23,7 @@ from .usage import UsageService
 router = APIRouter(prefix="/api")
 
 TTS_PREFS_PATH = PROJECT_ROOT / "data" / "media" / "tts.json"
+ROUTE_PATH = PROJECT_ROOT / "data" / "model_route.json"
 PREVIEW_TEXT = "你好，我是你的助手。这样说话听起来自然吗？"
 
 
@@ -156,6 +158,46 @@ def health_detail() -> dict:
 
 
 # ── 语音偏好（M3）────────────────────────────────────────────
+# ── 本地/云端切换 ────────────────────────────────────────────
+def _read_mode() -> str:
+    try:
+        data = json.loads(ROUTE_PATH.read_text(encoding="utf-8"))
+        return str(data.get("mode") or "auto")
+    except (OSError, json.JSONDecodeError):
+        return "auto"
+
+
+def _write_mode(mode: str) -> None:
+    ROUTE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    ROUTE_PATH.write_text(json.dumps({"mode": mode}, ensure_ascii=False), encoding="utf-8")
+
+
+@router.get("/model/route", dependencies=[Depends(require_token)])
+def get_model_route(request: Request) -> dict:
+    settings = get_settings()
+    router = getattr(request.app.state, "router", None)
+    mode = getattr(router, "mode", None) or _read_mode()
+    return {
+        "mode": mode,
+        "modes": ["auto", "primary", "fallback"],
+        "primary_model": settings.local_model or settings.model_name,
+        "fallback_model": settings.model_name,
+        "cloud_configured": bool(settings.model_base_url and settings.model_api_key),
+        "primary_healthy": bool(getattr(router, "primary_healthy", True)),
+    }
+
+
+@router.post("/model/route", dependencies=[Depends(require_token)])
+def set_model_route(payload: dict, request: Request) -> dict:
+    router = getattr(request.app.state, "router", None)
+    mode = payload.get("mode")
+    if router is None:
+        raise HTTPException(status_code=409, detail="模型路由未就绪")
+    applied = router.set_mode(str(mode or "auto"))
+    _write_mode(applied)
+    return {"mode": applied}
+
+
 @router.get("/media/tts", dependencies=[Depends(require_token)])
 def get_tts_prefs() -> dict:
     settings = get_settings()

@@ -402,32 +402,72 @@ class QqService:
         """把图片理解结果拼成"数据区"文本；关掉视觉时行为与以前一致。"""
         if not self.settings.media_vision_enabled or not message.media:
             return message.text
-        image = next(
-            (ref for ref in message.media if ref.kind in {"image", "sticker"}), None
-        )
-        if image is None:
+        images = [ref for ref in message.media if ref.kind in {"image", "sticker"}][:3]
+        if not images:
             return message.text  # 语音等非图片媒体不走视觉
-        result = await asyncio.to_thread(
-            self.media.describe_image,
-            image,
+
+        blocks: list[str] = []
+        for index, ref in enumerate(images, start=1):
+            results = await asyncio.to_thread(
+                self._describe_refs, ref, message
+            )
+            for result in results:
+                block = format_image_block(result)
+                if len(images) > 1:
+                    block = "【第 " + str(index) + " 张图】" + block
+                blocks.append(block)
+                self.log.info(
+                    "图片理解",
+                    extra={
+                        "fields": {
+                            "chat": message.chat_key,
+                            "status": result.status.value,
+                            "code": result.error_code,
+                            "frames": len(results),
+                        }
+                    },
+                )
+
+        if message.text:
+            return "\n".join(blocks) + "\n【用户同时说】" + message.text
+        return "\n".join(blocks)
+
+    def _describe_refs(self, ref, message: InboundMessage):
+        """一张静态图 → 1 条结果；一张动图 → 抽 3 帧各分析一次。"""
+        if ref.kind == "image" and str(ref.name).lower().endswith((".gif", ".webp")):
+            frames = self._animated_frames(ref)
+            if frames:
+                return [
+                    self.media.describe_image(
+                        frame,
+                        chat_key=message.chat_key,
+                        actor=f"qq:{message.sender_id}",
+                        user_text=message.text,
+                    )
+                    for frame in frames
+                ]
+        result = self.media.describe_image(
+            ref,
             chat_key=message.chat_key,
             actor=f"qq:{message.sender_id}",
             user_text=message.text,
         )
-        self.log.info(
-            "图片理解",
-            extra={
-                "fields": {
-                    "chat": message.chat_key,
-                    "status": result.status.value,
-                    "code": result.error_code,
-                }
-            },
-        )
-        block = format_image_block(result)
-        if message.text:
-            return block + "\n【用户同时说】" + message.text
-        return block
+        return [result]
+
+    def _animated_frames(self, ref):
+        """用 ffmpeg 从动图里均匀抽 3 帧，失败就返回空（退回整图分析）。"""
+        from .media.frames import extract_frames
+
+        try:
+            return extract_frames(
+                ref,
+                ffmpeg=PROJECT_ROOT / self.settings.media_ffmpeg,
+                out_dir=self._media_tmp / "frames",
+                count=3,
+            )
+        except Exception as exc:  # noqa: BLE001 - 抽帧失败退回整图
+            self.log.warning("动图抽帧失败：%s", exc)
+            return []
 
     # ── 学习线（M1.5）─────────────────────────────────────────
     def _should_learn(self, message: InboundMessage) -> bool:

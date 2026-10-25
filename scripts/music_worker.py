@@ -50,7 +50,9 @@ def handle(request: dict) -> dict:
         task_type="text2music",
         thinking=False,
         caption=prompt,
-        lyrics=lyrics or "[instrumental]",
+        # 明确要求有演唱：原先歌词为空时回退成 [instrumental]，导致只有伴奏
+        lyrics=lyrics if lyrics.strip() else "[verse]\n轻轻地唱给你听\n[chorus]\n这一首歌只为你",
+        instrumental=False,
         vocal_language="zh",
         duration=max(10, min(60, seconds)),
         inference_steps=8,

@@ -3,55 +3,96 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>PAA 维护台</title>
+<title>PAA 维护控制台</title>
 <style>
-  :root { color-scheme: dark; }
+  :root {
+    color-scheme: dark;
+    --bg: #07080b;
+    --base: #0b0d11;
+    --card: #101319;
+    --line: #1d222b;
+    --line-strong: #2a3140;
+    --fg: #e8eaee;
+    --muted: #8a93a3;
+    --accent: #5e6ad2;
+    --ok: #35c46b;
+    --bad: #ef5b5b;
+    --warn: #e0a13a;
+    --mono: ui-monospace, "Cascadia Code", "JetBrains Mono", Consolas, monospace;
+  }
   * { box-sizing: border-box; }
-  body { margin: 0; font: 14px/1.6 system-ui, "Microsoft YaHei", sans-serif;
-         background: #14161a; color: #e6e8eb; }
-  header { display: flex; align-items: center; gap: 12px; padding: 12px 16px;
-           border-bottom: 1px solid #262a31; position: sticky; top: 0;
-           background: #14161a; z-index: 2; }
-  h1 { font-size: 16px; margin: 0; font-weight: 600; }
+  body {
+    margin: 0;
+    font: 14px/1.65 system-ui, "Microsoft YaHei", sans-serif;
+    background:
+      radial-gradient(1200px 600px at 100% -10%, rgba(94,106,210,.14), transparent 60%),
+      radial-gradient(900px 500px at -10% 0%, rgba(94,106,210,.08), transparent 55%),
+      var(--bg);
+    color: var(--fg);
+    min-height: 100vh;
+  }
+  header {
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    padding: 14px 20px; border-bottom: 1px solid var(--line);
+    position: sticky; top: 0; z-index: 5;
+    background: rgba(8,9,12,.86); backdrop-filter: blur(10px);
+  }
+  .brand { display: flex; flex-direction: column; line-height: 1.25; }
+  h1 { font-size: 15px; margin: 0; font-weight: 650; letter-spacing: .2px; }
+  .brand small { color: var(--muted); font-size: 11px; }
   .spacer { flex: 1; }
-  input, button { font: inherit; border-radius: 6px; border: 1px solid #333842;
-                  background: #1b1e24; color: #e6e8eb; padding: 6px 10px; }
+  input, button {
+    font: inherit; border-radius: 8px; border: 1px solid var(--line-strong);
+    background: var(--card); color: var(--fg); padding: 7px 11px;
+    transition: border-color .15s ease, background .15s ease;
+  }
+  input:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
   button { cursor: pointer; }
-  button:hover { border-color: #4a5568; }
-  button.danger { border-color: #7f1d1d; color: #fca5a5; }
-  main { padding: 16px; max-width: 1100px; margin: 0 auto; }
-  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-           gap: 12px; margin-bottom: 20px; }
-  .card { background: #1b1e24; border: 1px solid #262a31; border-radius: 10px; padding: 12px; }
-  .card b { display: block; font-size: 22px; }
-  .card span { color: #9aa4b2; font-size: 12px; }
-  nav { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
-  nav button.active { background: #2b3444; border-color: #3b4a63; }
-  .item { background: #1b1e24; border: 1px solid #262a31; border-radius: 8px;
-          padding: 10px 12px; margin-bottom: 8px; }
-  .meta { color: #9aa4b2; font-size: 12px; margin-bottom: 4px;
-          display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-  .chip { border: 1px solid #333842; border-radius: 999px; padding: 0 8px; font-size: 11px; }
-  .chip.local { border-color: #14532d; color: #86efac; }
-  .chip.cloud { border-color: #78350f; color: #fcd34d; }
+  button:hover { border-color: #3d4658; background: #141822; }
+  button.active { background: rgba(94,106,210,.18); border-color: #4a55b8; color: #cfd4ff; }
+  .seg { display: flex; gap: 0; border: 1px solid var(--line-strong); border-radius: 8px; overflow: hidden; }
+  .seg button { border: 0; border-radius: 0; padding: 6px 12px; background: transparent; font-size: 12px; }
+  .seg button + button { border-left: 1px solid var(--line); }
+  .seg button.active { background: rgba(94,106,210,.22); color: #dfe2ff; }
+  main { padding: 20px; max-width: 1120px; margin: 0 auto; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(158px, 1fr)); gap: 12px; margin-bottom: 22px; }
+  .card { background: linear-gradient(180deg, #11141b, var(--card)); border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
+  .card b { display: block; font: 600 23px/1.2 var(--mono); letter-spacing: -.5px; }
+  .card span { color: var(--muted); font-size: 12px; }
+  nav { display: flex; gap: 6px; margin-bottom: 14px; flex-wrap: wrap; }
+  nav button { font-size: 13px; padding: 6px 12px; }
+  .item { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 11px 13px; margin-bottom: 8px; }
+  .item:hover { border-color: var(--line-strong); }
+  .meta { color: var(--muted); font-size: 12px; margin-bottom: 5px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .meta .num { font-family: var(--mono); }
+  .chip { border: 1px solid var(--line-strong); border-radius: 999px; padding: 0 8px; font-size: 11px; color: var(--muted); }
+  .chip.local { border-color: #1f5137; color: #7fe0a6; }
+  .chip.cloud { border-color: #5a4118; color: #f0c274; }
   .content { white-space: pre-wrap; word-break: break-word; }
-  .empty { color: #6b7280; text-align: center; padding: 24px; }
-  .err { color: #fca5a5; }
-  .pills { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
-  .pill { display: flex; align-items: center; gap: 6px; background: #1b1e24;
-          border: 1px solid #262a31; border-radius: 999px; padding: 5px 12px;
-          font-size: 12px; }
-  .dot { width: 8px; height: 8px; border-radius: 50%; background: #6b7280; }
-  .dot.ok { background: #22c55e; }
-  .dot.bad { background: #ef4444; }
-  .pill small { color: #9aa4b2; }
+  .empty { color: #5f6775; text-align: center; padding: 28px; }
+  .err { color: #ff9c9c; }
+  .pills { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 18px; }
+  .pill { display: flex; align-items: center; gap: 6px; background: var(--card); border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px; font-size: 12px; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: #58606e; }
+  .dot.ok { background: var(--ok); box-shadow: 0 0 0 3px rgba(53,196,107,.12); }
+  .dot.bad { background: var(--bad); box-shadow: 0 0 0 3px rgba(239,91,91,.12); }
+  .pill small { color: var(--muted); font-family: var(--mono); }
+  .hint { color: var(--muted); font-size: 12px; }
 </style>
 </head>
 <body>
 <header>
-  <h1>PAA 维护台</h1>
+  <div class="brand">
+    <h1>PAA 维护控制台</h1>
+    <small>Personal AI Agent · 本机运维</small>
+  </div>
   <span class="spacer"></span>
-  <input id="token" placeholder="访问令牌（未设置可留空）" size="28">
+  <div class="seg" id="route">
+    <button data-mode="auto">自动</button>
+    <button data-mode="primary">本地</button>
+    <button data-mode="fallback">云端</button>
+  </div>
+  <input id="token" placeholder="访问令牌（未设置可留空）" size="24">
   <button id="save">保存</button>
   <button id="reload">刷新</button>
 </header>
@@ -65,6 +106,7 @@
     <button data-tab="tasks">任务</button>
     <button data-tab="audit">审计</button>
     <button data-tab="tts">语音</button>
+    <button data-tab="model">模型</button>
   </nav>
   <section id="list"><div class="empty">加载中…</div></section>
 </main>
@@ -253,13 +295,54 @@ function bindTts() {
   };
 }
 
+async function loadModel() {
+  const d = await api("/api/model/route");
+  const chips = [
+    ["primary", "本地 " + esc(d.primary_model || "-"), d.primary_healthy ? "local" : "cloud"],
+    ["fallback", "云端 " + esc(d.fallback_model || "-"), d.cloud_configured ? "cloud" : "local"],
+  ].map(([, label, cls]) => `<span class="chip ${cls}">${label}</span>`).join("");
+  return `<div class="card" style="max-width:560px">
+    <div style="margin-bottom:10px"><b>模型路由</b></div>
+    <div class="meta">${chips}</div>
+    <div class="hint" style="margin-top:10px">
+      当前模式：<b>${esc(d.mode)}</b>（auto = 本地优先、失败自动降级；primary = 只用本地；fallback = 只用云端）
+    </div>
+  </div>`;
+}
+
 const loaders = {
-  messages: loadMessages, memories: loadMemories, tasks: loadTasks, audit: loadAudit, tts: loadTts,
+  messages: loadMessages, memories: loadMemories, tasks: loadTasks,
+  audit: loadAudit, tts: loadTts, model: loadModel,
 };
+
+async function loadRoute() {
+  try {
+    const d = await api("/api/model/route");
+    document.querySelectorAll("#route button").forEach((b) => {
+      b.classList.toggle("active", b.dataset.mode === d.mode);
+    });
+  } catch (e) {
+    document.querySelectorAll("#route button").forEach((b) => b.classList.remove("active"));
+  }
+}
+
+document.querySelectorAll("#route button").forEach((btn) => {
+  btn.onclick = async () => {
+    try {
+      await api("/api/model/route", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: btn.dataset.mode }),
+      });
+      await loadRoute();
+    } catch (e) { alert("切换失败：" + e.message); }
+  };
+});
 
 async function load() {
   await loadHealth();
   await loadStatus();
+  await loadRoute();
   try {
     $("list").innerHTML = await loaders[state.tab]();
     if (state.tab === "tts") bindTts();

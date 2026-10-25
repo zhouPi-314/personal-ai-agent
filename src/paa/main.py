@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import logging
 import socket
 from contextlib import asynccontextmanager
 from urllib.parse import urlparse
@@ -20,6 +22,7 @@ from .config import PROJECT_ROOT, get_settings
 from .db import get_engine, session_scope
 from .llm.factory import build_router
 from .logging import configure
+from .media import janitor
 from .persona import PersonaCard, load_default_card
 from .qq_service import QqService
 from .tasks.engine import TaskEngine
@@ -35,6 +38,27 @@ def _probe(url: str, timeout: float = 1.0) -> bool:
             return True
     except OSError:
         return False
+
+
+def _warmup_sync(settings) -> None:
+    """启动后台预热：清临时文件 + 把 TTS 模型先拉起来，省掉第一条语音的 5 秒冷启动。"""
+    from .media.tts_factory import build_tts
+
+    janitor.sweep_quietly(PROJECT_ROOT / "data" / "media")
+    if not settings.media_tts_enabled:
+        return
+    try:
+        provider = build_tts(settings, PROJECT_ROOT)
+        provider.synthesize_speech("嗯。", out_dir=PROJECT_ROOT / "data" / "media" / "tmp")
+    except Exception as exc:  # noqa: BLE001 - 预热失败不影响服务
+        logging.getLogger("paa.main").warning("TTS 预热失败：%s", exc)
+
+
+async def _housekeeping(settings) -> None:
+    """每小时清理一次媒体临时文件。"""
+    while True:
+        await asyncio.sleep(3600)
+        await asyncio.to_thread(janitor.sweep_quietly, PROJECT_ROOT / "data" / "media")
 
 
 def create_app(router=None) -> FastAPI:
@@ -84,6 +108,21 @@ def create_app(router=None) -> FastAPI:
             except Exception as exc:  # noqa: BLE001
                 logger.error("模型链路未就绪", extra={"fields": {"error": str(exc)}})
         state["router_ready"] = active_router is not None
+        if active_router is not None:
+            try:
+                import json as _json
+
+                mode_file = PROJECT_ROOT / "data" / "model_route.json"
+                if mode_file.is_file():
+                    saved = _json.loads(mode_file.read_text(encoding="utf-8")).get("mode")
+                    if saved:
+                        active_router.set_mode(str(saved))
+            except Exception as exc:  # noqa: BLE001 - 读不到就用默认 auto
+                logger.warning("读取模型路由设置失败：%s", exc)
+
+        app.state.router = active_router
+        asyncio.create_task(asyncio.to_thread(_warmup_sync, settings))
+        asyncio.create_task(_housekeeping(settings))
 
         qq: QqService | None = None
         if active_router is not None and card is not None and settings.onebot_ws_url:
@@ -100,7 +139,7 @@ def create_app(router=None) -> FastAPI:
 
     app = FastAPI(title="PAA", version=__version__, lifespan=lifespan)
     app.state.health = state
-    app.state.router = router
+    app.state.router_holder = {"router": None}
     app.include_router(api_router)
 
     @app.get("/", include_in_schema=False)

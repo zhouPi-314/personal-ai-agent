@@ -38,6 +38,23 @@ class BrainRouter:
         self.recovery_seconds = recovery_seconds
         self._failures = 0
         self._demoted_at: float | None = None
+        # auto = 本地优先、失败降级；primary = 只用本地；fallback = 只用云端
+        self._mode = "auto"
+
+    @property
+    def mode(self) -> str:
+        return self._mode
+
+    def set_mode(self, mode: str) -> str:
+        """控制台里的“本地 / 云端 / 自动”开关。未知值一律按 auto 处理。"""
+        normalized = (mode or "auto").strip().lower()
+        if normalized not in {"auto", "primary", "fallback"}:
+            normalized = "auto"
+        self._mode = normalized
+        if normalized != "fallback":
+            self._demoted_at = None
+            self._failures = 0
+        return self._mode
 
     @property
     def primary_healthy(self) -> bool:
@@ -56,6 +73,12 @@ class BrainRouter:
         now: float | None = None,
     ) -> RoutedCompletion:
         moment = time.monotonic() if now is None else now
+
+        if self._mode == "fallback":
+            return self._use_fallback(messages, temperature, moment)
+        if self._mode == "primary":
+            completion = self.primary.complete(messages, temperature=temperature)
+            return RoutedCompletion(completion, "primary", False)
 
         if self._should_try_primary(moment):
             try:

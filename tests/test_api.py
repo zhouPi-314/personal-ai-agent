@@ -56,5 +56,5 @@ def test_ui_page_is_served():
         response = client.get("/")
 
     assert response.status_code == 200
-    assert "PAA 维护台" in response.text
+    assert "PAA 维护控制台" in response.text
     assert "/api/status" in response.text
