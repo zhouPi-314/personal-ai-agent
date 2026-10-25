@@ -10,6 +10,11 @@ dependencies = [
     "uvicorn[standard]>=0.30",
     "pydantic-settings>=2.4",
     "websockets>=13",
+    # 运行时真正依赖（此前只装在本地 venv 里，干净环境装不上）
+    "sqlalchemy>=2.0",
+    "psycopg[binary]>=3.2",
+    "alembic>=1.13",
+    "httpx>=0.27",
 ]
 
 [project.optional-dependencies]
