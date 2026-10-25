@@ -81,8 +81,10 @@ catch {
 }
 
 $applied = (Get-ItemProperty -Path $regKey -Name 'PagingFiles').PagingFiles
-if (-not $applied -or $applied -notmatch 'SystemCache') {
-    Write-Warning '写入后回读不到 D 盘条目，正在恢复自动管理...'
+# 注意：$applied 是数组时，-notmatch 会「过滤」而不是返回布尔值，必须先 join。
+$joined = ($applied -join ' ')
+if (-not $joined -or $joined -notmatch 'SystemCache') {
+    Write-Warning "写入后回读校验失败（当前值：$joined），正在恢复自动管理..."
     Restore-Auto
     exit 5
 }
