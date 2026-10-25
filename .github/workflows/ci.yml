@@ -39,4 +39,14 @@ jobs:
       - name: Migrate
         run: alembic upgrade head
       - name: Test
-        run: pytest -q
+        run: |
+          set +e
+          pytest -q --junitxml=report.xml | tee pytest.out
+          code=${PIPESTATUS[0]}
+          if [ "$code" -ne 0 ]; then
+            # 把失败用例发成注解，无需登录也能通过 check-runs API 读到
+            grep -hE '^(FAILED|ERROR) ' pytest.out | head -20 | while IFS= read -r line; do
+              echo "::error title=pytest::$line"
+            done
+          fi
+          exit "$code"
