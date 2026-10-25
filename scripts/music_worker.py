@@ -17,6 +17,23 @@ for _k in ("http_proxy", "https_proxy", "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY"
     os.environ.pop(_k, None)
 
 
+def _release(*objects) -> None:
+    """把模型与显存还给系统：唱歌是低频操作，用完就退比常驻更划算。"""
+    import contextlib
+    import gc
+
+    for obj in objects:
+        with contextlib.suppress(Exception):
+            del obj
+    gc.collect()
+    with contextlib.suppress(Exception):
+        import torch
+
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            torch.cuda.ipc_collect()
+
+
 def handle(request: dict) -> dict:
     from acestep.handler import AceStepHandler
     from acestep.inference import GenerationConfig, GenerationParams, generate_music
@@ -46,9 +63,29 @@ def handle(request: dict) -> dict:
     if not ok:
         return {"status": "error", "code": "E_INIT", "detail": str(msg)[:400]}
 
+    # 人声要靠 LM 规划歌词与演唱；不加载 LM 时 turbo 倾向只出伴奏。
+    llm = None
+    llm_s = 0.0
+    if request.get("thinking"):
+        from acestep.llm_inference import LLMHandler
+
+        llm_started = time.perf_counter()
+        llm = LLMHandler()
+        lm_msg, lm_ok = llm.initialize(
+            checkpoint_dir=os.path.join(project_root, "runtime", "acestep", "checkpoints"),
+            lm_model_path=request.get("lm_model") or "acestep-5Hz-lm-1.7B",
+            backend="pt",
+            device="auto",
+            offload_to_cpu=True,
+            dtype=None,
+        )
+        llm_s = round(time.perf_counter() - llm_started, 1)
+        if not lm_ok:
+            return {"status": "error", "code": "E_LM_INIT", "detail": str(lm_msg)[:400]}
+
     params = GenerationParams(
         task_type="text2music",
-        thinking=False,
+        thinking=bool(request.get("thinking")),
         caption=prompt,
         # 明确要求有演唱：原先歌词为空时回退成 [instrumental]，导致只有伴奏
         lyrics=lyrics if lyrics.strip() else "[verse]\n轻轻地唱给你听\n[chorus]\n这一首歌只为你",
@@ -62,7 +99,7 @@ def handle(request: dict) -> dict:
     config = GenerationConfig(batch_size=1, audio_format="wav")
 
     started = time.perf_counter()
-    result = generate_music(handler, None, params=params, config=config, save_dir=out_dir)
+    result = generate_music(handler, llm, params=params, config=config, save_dir=out_dir)
     gen_s = round(time.perf_counter() - started, 1)
 
     if not getattr(result, "success", False):
@@ -89,12 +126,16 @@ def handle(request: dict) -> dict:
         capture_output=True,
         check=False,
     )
+    _release(handler, llm)
+
     return {
         "status": "ok",
         "wav": wav,
         "mp3": mp3 if converted.returncode == 0 and os.path.exists(mp3) else "",
         "bytes": os.path.getsize(mp3) if os.path.exists(mp3) else os.path.getsize(wav),
         "init_s": init_s,
+        "lm_init_s": llm_s,
+        "thinking": bool(request.get("thinking")),
         "gen_s": gen_s,
         "seconds": max(10, min(60, seconds)),
     }

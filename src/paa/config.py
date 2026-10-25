@@ -98,6 +98,9 @@ class Settings(BaseSettings):
     media_music_dir: str = "data/media/music"
     media_music_seconds: int = 30
     media_music_quantization: str = "int8_weight_only"
+    # 是否加载 1.7B LM 让人声更稳（当前环境会崩，默认关）
+    media_music_thinking: bool = False
+    media_music_lm_model: str = "acestep-5Hz-lm-1.7B"
 
 
 @lru_cache

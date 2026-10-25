@@ -131,6 +131,8 @@ class QqService:
                     ffmpeg=PROJECT_ROOT / settings.media_ffmpeg,
                     seconds=settings.media_music_seconds,
                     quantization=settings.media_music_quantization,
+                    thinking=settings.media_music_thinking,
+                    lm_model=settings.media_music_lm_model,
                 )
                 if settings.media_music_enabled
                 else None
