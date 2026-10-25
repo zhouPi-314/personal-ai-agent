@@ -198,7 +198,8 @@
 | 2026-10-25 | Qwen3-TTS 0.6B 克隆接通：音色登记 + 克隆合成 + QQ 真机发送（ASR 可听清） | ✅ |
 | 2026-10-25 | ACE-Step LM 崩溃定位：单独初始化成功，与 DiT 共存时崩；建议改走官方 API 服务 | 🔍 |
 | 2026-10-25 | 配置清理：.env 去重（3 个重复键）、.env.example 补齐 23 项 | ✅ |
-| 2026-10-25 | 事故：PostgreSQL 进入恢复模式卡住，healthz 503；需管理员重启服务 | ⛔ 待处理 |
+| 2026-10-25 | 事故已恢复：PostgreSQL 卡在恢复模式 → 管理员杀进程重启，healthz 200 / db=True / 332 passed | ✅ |
+| 2026-10-25 | 唱歌人声重大进展：ACE-Step 官方 API 服务路线打通，`ACESTEP_INIT_LLM=true` + LM 放 CPU 可加载；LM 已能生成含人声描述的 caption | 🚧 生成阶段仍慢/停 |
 | 2026-10-24 | 修 bug：语音消息被误送去图片理解/学习线（E_MIME_MISMATCH） | ✅ 按 media.kind 过滤 |
 
 ## 变更记录
