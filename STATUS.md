@@ -200,6 +200,8 @@
 | 2026-10-25 | 配置清理：.env 去重（3 个重复键）、.env.example 补齐 23 项 | ✅ |
 | 2026-10-25 | 事故已恢复：PostgreSQL 卡在恢复模式 → 管理员杀进程重启，healthz 200 / db=True / 332 passed | ✅ |
 | 2026-10-25 | 唱歌人声重大进展：ACE-Step 官方 API 服务路线打通，`ACESTEP_INIT_LLM=true` + LM 放 CPU 可加载；LM 已能生成含人声描述的 caption | 🚧 生成阶段仍慢/停 |
+| 2026-10-26 | 控制台：PAA_HOST 改 0.0.0.0，`127.0.0.1:8000` 与 Tailscale 地址同时可访问 | ✅ |
+| 2026-10-26 | GitHub CI 由红转绿：补 PostgreSQL 服务、POSIX 密钥扫描、alembic 迁移、补全运行时依赖、GBK 用例标记 Windows-only | ✅ success |
 | 2026-10-24 | 修 bug：语音消息被误送去图片理解/学习线（E_MIME_MISMATCH） | ✅ 按 media.kind 过滤 |
 
 ## 变更记录
