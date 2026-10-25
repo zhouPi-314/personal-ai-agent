@@ -7,6 +7,24 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: paa_dev
+          POSTGRES_DB: paa_dev
+          # 临时 CI 容器，用 trust 认证，避免在仓库里出现任何口令
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U paa_dev"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      PAA_DATABASE_URL: postgresql+psycopg://paa_dev@127.0.0.1:5432/paa_dev
+      PAA_ENV: test
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -17,6 +35,8 @@ jobs:
       - name: Lint
         run: ruff check src tests
       - name: Secret scan
-        run: pwsh -File scripts/secret-scan.ps1
+        run: bash scripts/secret-scan.sh
+      - name: Migrate
+        run: alembic upgrade head
       - name: Test
         run: pytest -q

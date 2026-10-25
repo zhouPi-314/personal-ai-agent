@@ -21,7 +21,7 @@ $patterns = [ordered]@{
 $hits = @()
 Get-ChildItem -LiteralPath $root -Recurse -File -Force |
     # .env 是本机凭据文件（已被 .gitignore 排除）；扫描器自身的正则不是秘密。
-    Where-Object { $_.FullName -notmatch $skip -and $_.Name -notin @('.env', 'secret-scan.ps1') } |
+    Where-Object { $_.FullName -notmatch $skip -and $_.Name -notin @('.env', 'secret-scan.ps1', 'secret-scan.sh') } |
     ForEach-Object {
         $file = $_
         foreach ($name in $patterns.Keys) {
