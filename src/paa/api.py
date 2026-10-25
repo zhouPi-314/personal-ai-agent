@@ -172,6 +172,52 @@ def _write_mode(mode: str) -> None:
     ROUTE_PATH.write_text(json.dumps({"mode": mode}, ensure_ascii=False), encoding="utf-8")
 
 
+# ── 人物卡 ──────────────────────────────────────────────────
+@router.get("/persona", dependencies=[Depends(require_token)])
+def get_persona() -> dict:
+    from .persona import MAX_CARD_CHARS, load_default_card
+
+    settings = get_settings()
+    try:
+        card = load_default_card()
+        text = card.text
+    except Exception as exc:  # noqa: BLE001 - 卡片缺失不是 500
+        return {"exists": False, "text": "", "chars": 0, "max_chars": MAX_CARD_CHARS, "error": str(exc)[:200]}
+    return {
+        "exists": True,
+        "path": settings.persona_path,
+        "text": text,
+        "chars": len(text),
+        "max_chars": MAX_CARD_CHARS,
+    }
+
+
+@router.post("/persona", dependencies=[Depends(require_token)])
+def save_persona(payload: dict, request: Request) -> dict:
+    from .persona import MAX_CARD_CHARS, PersonaError, load_default_card
+
+    settings = get_settings()
+    text = str(payload.get("text") or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="人物卡不能为空")
+    if len(text) > MAX_CARD_CHARS:
+        raise HTTPException(status_code=400, detail=f"超过 {MAX_CARD_CHARS} 字符")
+
+    path = PROJECT_ROOT / settings.persona_path
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+
+    qq = getattr(request.app.state, "qq", None)
+    reloaded = False
+    if qq is not None:
+        try:
+            qq.card = load_default_card()
+            reloaded = True
+        except PersonaError as exc:
+            raise HTTPException(status_code=500, detail=f"已保存但重新加载失败：{exc}") from exc
+    return {"saved": True, "chars": len(text), "reloaded": reloaded}
+
+
 @router.get("/model/route", dependencies=[Depends(require_token)])
 def get_model_route(request: Request) -> dict:
     settings = get_settings()

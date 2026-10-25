@@ -106,6 +106,7 @@
     <button data-tab="tasks">任务</button>
     <button data-tab="audit">审计</button>
     <button data-tab="tts">语音</button>
+    <button data-tab="persona">人物</button>
     <button data-tab="model">模型</button>
   </nav>
   <section id="list"><div class="empty">加载中…</div></section>
@@ -295,6 +296,43 @@ function bindTts() {
   };
 }
 
+async function loadPersona() {
+  const d = await api("/api/persona");
+  return `<div class="card" style="max-width:720px">
+    <div style="margin-bottom:10px"><b>人物卡</b>
+      <span class="chip">${esc(d.path || "")}</span>
+      <span class="chip"><span id="persona-count">${d.chars}</span>/${d.max_chars}</span></div>
+    <textarea id="persona-text" spellcheck="false"
+      style="width:100%;min-height:300px;background:#0b0d11;color:var(--fg);
+             border:1px solid var(--line-strong);border-radius:8px;padding:10px;
+             font:13px/1.7 var(--mono);resize:vertical">${esc(d.text || "")}</textarea>
+    <div style="margin-top:10px">
+      <button id="persona-save">保存并生效</button>
+      <span id="persona-status" class="hint" style="margin-left:8px"></span>
+    </div>
+    <div class="hint" style="margin-top:10px">
+      保存后立即热重载，下一条 QQ 消息就用人设新版本。底线规则不受影响（代码内置，不可覆盖）。
+    </div>
+  </div>`;
+}
+
+function bindPersona() {
+  const area = $("persona-text");
+  if (!area) return;
+  area.oninput = () => { $("persona-count").textContent = area.value.length; };
+  $("persona-save").onclick = async () => {
+    $("persona-status").textContent = "保存中…";
+    try {
+      const r = await api("/api/persona", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: area.value }),
+      });
+      $("persona-status").textContent = r.reloaded ? "已保存并热重载" : "已保存（服务未在线，稍后生效）";
+    } catch (e) { $("persona-status").textContent = "保存失败：" + e.message; }
+  };
+}
+
 async function loadModel() {
   const d = await api("/api/model/route");
   const chips = [
@@ -312,7 +350,7 @@ async function loadModel() {
 
 const loaders = {
   messages: loadMessages, memories: loadMemories, tasks: loadTasks,
-  audit: loadAudit, tts: loadTts, model: loadModel,
+  audit: loadAudit, tts: loadTts, persona: loadPersona, model: loadModel,
 };
 
 async function loadRoute() {
@@ -346,6 +384,7 @@ async function load() {
   try {
     $("list").innerHTML = await loaders[state.tab]();
     if (state.tab === "tts") bindTts();
+    if (state.tab === "persona") bindPersona();
     document.querySelectorAll("[data-revoke]").forEach((btn) => {
       btn.onclick = async () => {
         if (!confirm("撤销后这条记忆不再参与对话，确定？")) return;

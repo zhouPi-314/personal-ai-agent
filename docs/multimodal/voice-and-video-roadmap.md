@@ -84,3 +84,21 @@ Kokoro 是**固定音色**的模型，不能克隆。要"学某个音色"必须�
 1. 换更小的 **0.6B LM** 再试；
 2. 或改用 base 模型 + 更多推理步；
 3. 或换支持"给定歌词直接演唱"的模型（CosyVoice2 / Qwen3-TTS 也具备演唱能力）。
+## 6. 本轮落地（2026-10-25 晚）
+
+| 能力 | 状态 |
+|---|---|
+| **VOICEVOX 音色接入** | ✅ 适配器完成（`providers/tts_voicevox`：`/speakers` 列音色、`/audio_query`+`/synthesis` 合成）。**引擎需另行安装**（官方发布在 GitHub，当前网络不通），引擎跑起来后把 `PAA_MEDIA_TTS_PROVIDER=voicevox` 即可用 |
+| **人物卡编辑** | ✅ 控制台新增「人物」页：读写 `persona.md`、字数统计、保存后**热重载**（下一条消息即生效），底线规则不受影响 |
+| **视频理解（第一步）** | ✅ 入站 `video` 段解析 → ffmpeg 抽 3 帧 + 抽 16k 音轨 → 视觉描述 + ASR 转写 → 结构化喂给对话 |
+| 视频→唱歌（第二步） | 🚧 音轨已经抽出来了，下一步把它作为 ACE-Step 的 `reference_audio` 做风格参考 |
+| Qwen3-TTS 克隆音色 | 🚧 `qwen-tts` 已装、0.6B 权重下载中；装好后接成 provider，替换 Kokoro |
+
+## 7. 部署前置：VOICEVOX 引擎
+
+1. 下载 VOICEVOX 引擎（官方 GitHub Releases，**需要能访问 GitHub 的网络**）；
+2. 解压到 **D 盘**（例如 `D:\...\runtime\voicevox`），运行 `run.exe`，默认监听 `127.0.0.1:50021`；
+3. PAA 侧把 `PAA_MEDIA_TTS_PROVIDER` 改成 `voicevox`，可选 `PAA_MEDIA_VOICEVOX_URL` / `PAA_MEDIA_VOICEVOX_SPEAKER`。
+
+**署名**：VOICEVOX 多数角色条款要求标注角色名。适配器已在 `VoicevoxVoice.credit` 里保留角色名，
+需要时在回复末尾追加一次署名；如果所用角色条款不要求，可以不显示。

@@ -7,6 +7,7 @@ from pathlib import Path
 from ..config import Settings
 from .providers.tts_kokoro import KokoroTTSProvider
 from .providers.tts_sapi import SapiTTSProvider
+from .providers.tts_voicevox import VoicevoxTTSProvider
 
 
 def build_tts(settings: Settings, project_root: Path):
@@ -15,8 +16,15 @@ def build_tts(settings: Settings, project_root: Path):
         voice=settings.media_tts_voice,
         max_chars=settings.media_tts_max_chars,
     )
-    if (settings.media_tts_provider or "kokoro").strip().lower() == "sapi":
+    provider = (settings.media_tts_provider or "kokoro").strip().lower()
+    if provider == "sapi":
         return sapi
+    if provider == "voicevox":
+        voicevox = VoicevoxTTSProvider(
+            base_url=settings.media_voicevox_url,
+            default_speaker=settings.media_voicevox_speaker,
+        )
+        return voicevox if voicevox.available() else sapi
     kokoro = KokoroTTSProvider(
         python_exe=project_root / settings.media_asr_python,
         worker_script=project_root / settings.media_tts_kokoro_worker,

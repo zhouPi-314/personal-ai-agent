@@ -209,6 +209,42 @@ class MediaRouter:
         )
         return result
 
+    def transcribe_path(self, path, *, chat_key: str, actor: str = "") -> MediaResult:
+        """直接对本地 16k WAV 转写（视频音轨走这里，不再下载）。"""
+        if not self.settings.enabled or not self.settings.asr_enabled:
+            return _denied(Capability.RECOGNIZE_AUDIO, "asr_disabled")
+        if self.asr is None or not getattr(self.asr, "available", lambda: False)():
+            return MediaResult(
+                status=ResultStatus.FAILED,
+                capability=Capability.RECOGNIZE_AUDIO,
+                error_code="E_MODEL_UNAVAILABLE",
+            )
+        from .contracts import MediaInput
+
+        try:
+            payload = Path(path).read_bytes()
+        except OSError as exc:
+            return MediaResult(
+                status=ResultStatus.REJECTED,
+                capability=Capability.RECOGNIZE_AUDIO,
+                error_code="E_NOT_FOUND",
+                error_detail=str(exc)[:120],
+            )
+        item = MediaInput(
+            ref=MediaRef(kind="audio", source="file", locator=str(path)),
+            local_path=Path(path),
+            mime="audio/wav",
+            size_bytes=len(payload),
+            sha256="",
+        )
+        result = self.asr.recognize_audio(item)
+        self._emit(
+            actor=actor or chat_key,
+            verdict="allowed" if result.status is ResultStatus.OK else "failed",
+            detail="asr(file) status=" + result.status.value,
+        )
+        return result
+
     # ── 语音识别（M3，本地执行、不出网）────────────────────────
     def transcribe_audio(
         self,

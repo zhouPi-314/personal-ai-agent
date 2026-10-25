@@ -67,6 +67,11 @@ def sniff(data: bytes) -> tuple[str, str] | None:
             return mime, suffix
     if data.startswith(b"RIFF") and data[8:12] == b"WAVE":
         return "audio/wav", ".wav"
+    # 视频：MP4 家族在偏移 4 处是 ftyp；WebM 以 EBML magic 开头
+    if len(data) > 12 and data[4:8] == b"ftyp":
+        return "video/mp4", ".mp4"
+    if data.startswith(b"\x1a\x45\xdf\xa3"):
+        return "video/webm", ".webm"
     return None
 
 
@@ -97,6 +102,7 @@ def fetch(
     timeout: float = TIMEOUT,
     transport: httpx.BaseTransport | None = None,
     allow_audio: bool = False,
+    allow_video: bool = False,
 ) -> MediaInput:
     """把 ref 落成 out_dir 下的随机文件名，并返回校验后的元数据。"""
     data = _read(ref, max_bytes=max_bytes, timeout=timeout, transport=transport)
@@ -109,7 +115,10 @@ def fetch(
     if kind is None:
         raise MediaFetchError("E_MIME_MISMATCH", "不是可识别的图片或音频格式")
     mime, suffix = kind
-    if not allow_audio and not mime.startswith("image/"):
+    if mime.startswith("video/"):
+        if not allow_video:
+            raise MediaFetchError("E_MIME_MISMATCH", "这里不接受视频")
+    elif not allow_audio and not mime.startswith("image/"):
         raise MediaFetchError("E_MIME_MISMATCH", "这里只接受图片")
 
     out_dir.mkdir(parents=True, exist_ok=True)

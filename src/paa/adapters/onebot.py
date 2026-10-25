@@ -39,12 +39,12 @@ class InboundMessage:
 def _media_ref(segment: dict[str, Any]) -> MediaRef | None:
     """把 image/mface 段翻成 MediaRef；拿不到可定位的来源就放弃。"""
     kind = segment.get("type")
-    if kind not in {"image", "mface", "record"}:
+    if kind not in {"image", "mface", "record", "video"}:
         return None
     data = segment.get("data") or {}
     url = str(data.get("url") or "").strip()
     name = str(data.get("file") or "").strip()
-    media_kind = {"image": "image", "mface": "sticker", "record": "audio"}[kind]
+    media_kind = {"image": "image", "mface": "sticker", "record": "audio", "video": "video"}[kind]
 
     if url.lower().startswith(("http://", "https://")):
         return MediaRef(kind=media_kind, source="url", locator=url, name=name)
@@ -96,6 +96,8 @@ def _segments_to_text(segments: Any) -> str:
             parts.append("[表情]")
         elif kind == "record":
             parts.append("[语音]")
+        elif kind == "video":
+            parts.append("[视频]")
         elif kind == "at":
             parts.append(f"@{data.get('qq')}")
     return "".join(parts).strip()

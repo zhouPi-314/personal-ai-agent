@@ -125,9 +125,11 @@ def create_app(router=None) -> FastAPI:
         asyncio.create_task(_housekeeping(settings))
 
         qq: QqService | None = None
+        app.state.qq = None
         if active_router is not None and card is not None and settings.onebot_ws_url:
             qq = QqService(settings=settings, router=active_router, card=card)
             qq.start()
+            app.state.qq = qq
             state["qq_enabled"] = True
             logger.info("QQ 入口已启动", extra={"fields": {"ws": settings.onebot_ws_url}})
 
