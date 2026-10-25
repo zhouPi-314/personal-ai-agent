@@ -61,12 +61,24 @@ function Set-PageFile([string]$path, [uint32]$initial, [uint32]$maximum) {
         Write-Host "已调整：$path -> $initial / $maximum MB"
     }
     else {
-        New-CimInstance -ClassName Win32_PageFileSetting -Property @{
-            Name        = $path
-            InitialSize = [uint32]$initial
-            MaximumSize = [uint32]$maximum
-        } | Out-Null
-        Write-Host "已创建：$path -> $initial / $maximum MB"
+        try {
+            New-CimInstance -ClassName Win32_PageFileSetting -Property @{
+                Name        = $path
+                InitialSize = [uint32]$initial
+                MaximumSize = [uint32]$maximum
+            } | Out-Null
+            Write-Host "已创建：$path -> $initial / $maximum MB"
+        }
+        catch {
+            # 该路径已有实例（系统可能预置了 0/0 的占位），改用 Set 覆盖
+            $again = Get-CimInstance Win32_PageFileSetting -Filter "Name='$path'" -ErrorAction SilentlyContinue
+            if (-not $again) { throw }
+            Set-CimInstance -InputObject $again -Property @{
+                InitialSize = [uint32]$initial
+                MaximumSize = [uint32]$maximum
+            }
+            Write-Host "已覆盖已有设置：$path -> $initial / $maximum MB"
+        }
     }
 }
 

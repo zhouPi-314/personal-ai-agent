@@ -49,7 +49,17 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\system\pagefile-to-d
 
 **回滚**：把「自动管理分页文件大小」勾回去（或 `Set-CimInstance` 设 `AutomaticManagedPagefile=$true`）后重启。
 
-## 4. 为什么不把转储文件也搬到 D
+## 4. 本机网络：GitHub 只能走系统代理
+
+本机直连 github.com 与 codeload.github.com 会超时，但 api.github.com 正常。
+git 默认不读 Windows 系统代理，需要显式指定一次：
+
+```powershell
+Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings' | Select-Object ProxyEnable, ProxyServer
+git -c http.proxy=http://127.0.0.1:PORT -c https.proxy=http://127.0.0.1:PORT push
+```
+
+## 5. 为什么不把转储文件也搬到 D
 
 Windows 的内核转储默认写引导卷（`C:\Windows\MEMORY.DMP`）。搬到 D 需要额外配置
 `DedicatedDumpFile` + 专用转储类型，属于"改动面更大、收益很小"的改动，暂不做。
