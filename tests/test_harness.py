@@ -81,6 +81,10 @@ def test_final_text_empty_when_no_events():
     assert _final_text([]) == ""
 
 
+import pytest
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="GBK 控制台是 Windows 特有行为，Linux CI 上不适用")
 def test_handles_gbk_output_from_child():
     code = "print('{\"type\":\"final\",\"text\":\"完成\"}', flush=True)\n"
     env = {"PYTHONIOENCODING": "gbk", "PATH": ""}
