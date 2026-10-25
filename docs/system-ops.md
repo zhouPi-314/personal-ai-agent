@@ -64,3 +64,22 @@ git -c http.proxy=http://127.0.0.1:PORT -c https.proxy=http://127.0.0.1:PORT pus
 Windows 的内核转储默认写引导卷（`C:\Windows\MEMORY.DMP`）。搬到 D 需要额外配置
 `DedicatedDumpFile` + 专用转储类型，属于"改动面更大、收益很小"的改动，暂不做。
 C 保留 4GB 分页已足够写内核转储。
+## 11. 分页文件脚本改为「注册表直写」（2026-10-26）
+
+`Win32_PageFileSetting` 在本机不可写：系统托管时它只返回占位 `PagingFiles=?:\pagefile.sys`，
+`New-CimInstance`/`Set-CimInstance` 都报「对象或属性已存在」。
+
+改为直接写注册表（Windows 真正读取的位置）：
+
+```
+HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PagingFiles
+```
+
+格式为 MULTI_SZ，每行 `<路径> <初始MB> <最大MB>`：
+
+```
+C:\pagefile.sys 8192 8192
+D:\SystemCache\pagefile.sys 32768 32768
+```
+
+脚本仍保留全部安全护栏：管理员检查、D 盘剩余 <36GB 中止、失败自动恢复「自动管理」、写后回读校验。

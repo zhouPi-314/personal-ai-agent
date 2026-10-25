@@ -1,17 +1,22 @@
 ﻿<#
-把分页文件迁到 D 盘（需以管理员身份运行，改完需重启）。
+把分页文件迁到 D 盘（需管理员 + 重启）。
 
-设计取舍（基于本机实测，2026-10-25）：
-  RAM 15.3GB，分页文件当前系统托管、已分配 11,776MB，但峰值只用了 159MB。
-  崩溃转储设置为"内核内存转储"(CrashDumpEnabled=3)，需要引导卷上仍有分页文件。
-  因此：C 保留固定 4GB（够写内核转储、也保住提交上限），D 新增固定 8GB。
-  合计 12GB ≈ 现状 11.5GB，不降低提交上限，同时给 C 释放约 7.7GB。
+为什么用注册表而不是 WMI：
+  Win32_PageFileSetting 在本机反复报「对象或属性已存在」（系统托管时它只给出占位
+  PagingFiles=?:\pagefile.sys，New/Set-CimInstance 都写不进去）。
+  真正生效的位置是注册表：
+    HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PagingFiles
+  格式：每行 "<路径> <初始MB> <最大MB>"。
+
+本机实测（2026-10-26）：
+  ACE-Step 的 LM 模式要同时驻留 DiT + 1.7B LM + text encoder + VAE，
+  提交内存峰值超过 26.8GB，会报 os error 1455（页面文件太小），
+  并连带把 PostgreSQL 一起挤崩。故改为 C 8GB + D 32GB（约 40GB 提交额度）。
 
 安全约束：
-  - 只修改分页文件设置，不删除任何文件；
-  - C 上的 pagefile.sys 由系统在重启时自动收缩；
-  - 若已配置过则直接退出（幂等）；
-  - D 盘剩余空间不足 12GB 则拒绝执行。
+  - 只改「分页文件设置」，不删除任何文件；
+  - D 盘剩余低于 36GB 直接中止；
+  - 任何一步失败都会恢复「自动管理」，不会留下「无分页文件」的危险状态。
 #>
 
 $ErrorActionPreference = 'Stop'
@@ -23,18 +28,18 @@ if (-not $isAdmin) {
     exit 2
 }
 
+$regKey = 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management'
 $dFolder = 'D:\SystemCache'
 $dFile = Join-Path $dFolder 'pagefile.sys'
-# 2026-10-26 依据实测调整：ACE-Step 的 LM 模式会同时驻留 DiT + LM + text encoder + VAE，
-# 峰值提交超过 26.8GB，触发 os error 1455（页面文件太小）。改为 C 8GB + D 32GB。
 $cInitMB = 8192
+$cMaxMB = 8192
 $dInitMB = 32768
 $dMaxMB = 32768
+$needGB = 36
 
-# D 盘空间只要求「够放页面文件 + 余量」，页面文件按需增长，不会立刻占满。
 $dFreeGB = [math]::Round((Get-PSDrive D).Free / 1GB, 1)
-if ($dFreeGB -lt 36) {
-    Write-Error "D 盘剩余仅 $dFreeGB GB，低于 36GB 安全线（页面文件上限 32GB + 4GB 余量），已中止。"
+if ($dFreeGB -lt $needGB) {
+    Write-Error "D 盘剩余仅 $dFreeGB GB，低于 $needGB GB 安全线，已中止。"
     exit 3
 }
 
@@ -43,66 +48,52 @@ if (-not (Test-Path -LiteralPath $dFolder)) {
     Write-Host "已创建目录 $dFolder"
 }
 
-$cs = Get-CimInstance Win32_ComputerSystem
-if ($cs.AutomaticManagedPagefile) {
-    Set-CimInstance -InputObject $cs -Property @{ AutomaticManagedPagefile = $false }
-    Write-Host '已关闭"自动管理分页文件大小"'
-}
-
-function Set-PageFile([string]$path, [uint32]$initial, [uint32]$maximum) {
-    # Win32_PageFileSetting 的 InitialSize/MaximumSize 是 uint32，传 Int32 会报「类型不匹配」
-    $existing = Get-CimInstance Win32_PageFileSetting -Filter "Name='$path'" -ErrorAction SilentlyContinue
-    if ($existing) {
-        if ($existing.InitialSize -eq $initial -and $existing.MaximumSize -eq $maximum) {
-            Write-Host "已符合目标，无需修改：$path"
-            return
-        }
-        Set-CimInstance -InputObject $existing -Property @{
-            InitialSize = [uint32]$initial
-            MaximumSize = [uint32]$maximum
-        }
-        Write-Host "已调整：$path -> $initial / $maximum MB"
+function Restore-Auto {
+    try {
+        Set-CimInstance -InputObject (Get-CimInstance Win32_ComputerSystem) -Property @{ AutomaticManagedPagefile = $true }
+        Write-Warning '已恢复「自动管理分页文件大小」。'
     }
-    else {
-        try {
-            New-CimInstance -ClassName Win32_PageFileSetting -Property @{
-                Name        = $path
-                InitialSize = [uint32]$initial
-                MaximumSize = [uint32]$maximum
-            } | Out-Null
-            Write-Host "已创建：$path -> $initial / $maximum MB"
-        }
-        catch {
-            # 该路径已有实例（系统可能预置了 0/0 的占位），改用 Set 覆盖
-            $again = Get-CimInstance Win32_PageFileSetting -Filter "Name='$path'" -ErrorAction SilentlyContinue
-            if (-not $again) { throw }
-            Set-CimInstance -InputObject $again -Property @{
-                InitialSize = [uint32]$initial
-                MaximumSize = [uint32]$maximum
-            }
-            Write-Host "已覆盖已有设置：$path -> $initial / $maximum MB"
-        }
+    catch {
+        Write-Warning '恢复自动管理失败，请手动在「系统属性 → 高级 → 性能 → 虚拟内存」里勾回自动管理。'
     }
 }
 
 try {
-    Set-PageFile -path 'C:\pagefile.sys' -initial $cInitMB -maximum $cInitMB
-    Set-PageFile -path $dFile -initial $dInitMB -maximum $dMaxMB
+    $cs = Get-CimInstance Win32_ComputerSystem
+    if ($cs.AutomaticManagedPagefile) {
+        Set-CimInstance -InputObject $cs -Property @{ AutomaticManagedPagefile = $false }
+        Write-Host '已关闭「自动管理分页文件大小」'
+    }
+
+    $entries = @(
+        "C:\pagefile.sys $cInitMB $cMaxMB"
+        "$dFile $dInitMB $dMaxMB"
+    )
+    Set-ItemProperty -Path $regKey -Name 'PagingFiles' -Value $entries -Type MultiString -Force
+    Write-Host '已写入分页文件配置：'
+    foreach ($line in $entries) { Write-Host "  $line" }
 }
 catch {
-    # 中途失败时恢复自动管理，避免「自动管理已关、又没配置任何分页文件」的危险状态
-    Write-Warning "配置失败：$($_.Exception.Message)，正在恢复自动管理..."
-    Set-CimInstance -InputObject (Get-CimInstance Win32_ComputerSystem) -Property @{ AutomaticManagedPagefile = $true }
-    Write-Error '已恢复自动管理，本次未改动分页文件。'
+    Write-Warning "配置失败：$($_.Exception.Message)"
+    Restore-Auto
+    Write-Error '本次未改动分页文件设置。'
     exit 4
 }
 
-Write-Host ''
-Write-Host '当前分页文件设置：'
-Get-CimInstance Win32_PageFileSetting | ForEach-Object {
-    Write-Host ("  {0}  {1} / {2} MB" -f $_.Name, $_.InitialSize, $_.MaximumSize)
+$applied = (Get-ItemProperty -Path $regKey -Name 'PagingFiles').PagingFiles
+if (-not $applied -or $applied -notmatch 'SystemCache') {
+    Write-Warning '写入后回读不到 D 盘条目，正在恢复自动管理...'
+    Restore-Auto
+    exit 5
 }
+
 Write-Host ''
-Write-Host '完成。请重启生效：重启后 C 盘 pagefile.sys 会收缩到 8GB，D 盘会生成新的 32GB 页面文件。'
-Write-Host '回滚：把 AutomaticManagedPagefile 设回 $true 并重启即可。'
+Write-Host '当前注册表配置：'
+foreach ($line in $applied) { Write-Host "  $line" }
+Write-Host ''
+Write-Host '完成。请重启生效：'
+Write-Host "  - C:\pagefile.sys 收缩为 $($cInitMB / 1024) GB"
+Write-Host "  - D:\SystemCache\pagefile.sys 为 $($dInitMB / 1024) GB"
+Write-Host '回滚：把「自动管理分页文件大小」勾回去，或执行'
+Write-Host '  Set-CimInstance (Get-CimInstance Win32_ComputerSystem) -Property @{AutomaticManagedPagefile=$true}'
 exit 0
