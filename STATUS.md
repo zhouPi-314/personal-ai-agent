@@ -202,6 +202,9 @@
 | 2026-10-25 | 唱歌人声重大进展：ACE-Step 官方 API 服务路线打通，`ACESTEP_INIT_LLM=true` + LM 放 CPU 可加载；LM 已能生成含人声描述的 caption | 🚧 生成阶段仍慢/停 |
 | 2026-10-26 | 控制台：PAA_HOST 改 0.0.0.0，`127.0.0.1:8000` 与 Tailscale 地址同时可访问 | ✅ |
 | 2026-10-26 | GitHub CI 由红转绿：补 PostgreSQL 服务、POSIX 密钥扫描、alembic 迁移、补全运行时依赖、GBK 用例标记 Windows-only | ✅ success |
+| 2026-10-26 | 唱歌人声根因定位：`os error 1455 页面文件太小`；提交上限 26.8GB 不够 DiT+LM 同时驻留 | 🔍 |
+| 2026-10-26 | 页面文件方案改为 C 8GB + D 32GB（脚本已更新，待管理员执行+重启） | ⏳ |
+| 2026-10-26 | 清理：ACE-Step 误下载的 3.17GB 重复副本已删除 | ✅ |
 | 2026-10-24 | 修 bug：语音消息被误送去图片理解/学习线（E_MIME_MISMATCH） | ✅ 按 media.kind 过滤 |
 
 ## 变更记录

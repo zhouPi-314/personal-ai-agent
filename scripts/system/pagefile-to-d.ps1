@@ -25,13 +25,16 @@ if (-not $isAdmin) {
 
 $dFolder = 'D:\SystemCache'
 $dFile = Join-Path $dFolder 'pagefile.sys'
-$cInitMB = 4096
-$dInitMB = 8192
-$dMaxMB = 8192
+# 2026-10-26 依据实测调整：ACE-Step 的 LM 模式会同时驻留 DiT + LM + text encoder + VAE，
+# 峰值提交超过 26.8GB，触发 os error 1455（页面文件太小）。改为 C 8GB + D 32GB。
+$cInitMB = 8192
+$dInitMB = 32768
+$dMaxMB = 32768
 
+# D 盘空间只要求「够放页面文件 + 余量」，页面文件按需增长，不会立刻占满。
 $dFreeGB = [math]::Round((Get-PSDrive D).Free / 1GB, 1)
-if ($dFreeGB -lt 12) {
-    Write-Error "D 盘剩余仅 $dFreeGB GB，低于 12GB 安全线，已中止。"
+if ($dFreeGB -lt 36) {
+    Write-Error "D 盘剩余仅 $dFreeGB GB，低于 36GB 安全线（页面文件上限 32GB + 4GB 余量），已中止。"
     exit 3
 }
 
@@ -100,6 +103,6 @@ Get-CimInstance Win32_PageFileSetting | ForEach-Object {
     Write-Host ("  {0}  {1} / {2} MB" -f $_.Name, $_.InitialSize, $_.MaximumSize)
 }
 Write-Host ''
-Write-Host '完成。请重启生效：重启后 C 盘 pagefile.sys 会收缩到 4GB，D 盘会生成新的 8GB 文件。'
+Write-Host '完成。请重启生效：重启后 C 盘 pagefile.sys 会收缩到 8GB，D 盘会生成新的 32GB 页面文件。'
 Write-Host '回滚：把 AutomaticManagedPagefile 设回 $true 并重启即可。'
 exit 0
