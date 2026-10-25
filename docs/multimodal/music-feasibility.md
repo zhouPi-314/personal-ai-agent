@@ -64,3 +64,47 @@ QQ 文字指令（如「唱一段关于下雨的歌」）
 - 生成能力**默认关闭**，需显式 `PAA_MEDIA_MUSIC_ENABLED=true`；
 - 与 ASR/TTS 一样走**侧车**，主进程零 torch 依赖；
 - 失败不得影响聊天主链路。
+## 8. 实测结论（2026-10-25）：**当前环境下无法运行**
+
+### 环境已就绪
+
+| 项 | 实测 |
+|---|---|
+| CUDA | torch 2.7.1+cu128，`cuda.is_available()=True`，RTX 4050 6.0GB，基础张量运算正常 |
+| 依赖 | 按仓库 `uv.lock` 安装：diffusers 0.37.1 / transformers 4.57.6 / tokenizers 0.22.2 |
+| 权重 | 9.4GB 全部下载完成并落在 **D 盘**（acestep-v15-turbo 4.5GB、LM 1.7B 3.5GB、Qwen3-Embedding 0.6B 1.1GB、VAE 0.3GB） |
+| 自检 | 仓库自带 `check_gpu.py` 通过："Your GPU setup appears to be working correctly" |
+
+### 失败点
+
+`initialize_service` 在加载主模型时**原生崩溃**：
+
+```
+Process exited with code -1073741819  (0xC0000005  ACCESS_VIOLATION)
+日志最后一行：Attempting to load model with attention implementation: sdpa
+```
+
+**不是显存不足**（OOM 会是 Python 异常，不是进程级访问违例），也**不是 CPU/GPU 设备选择**——`device="cpu"` 同样崩。
+
+### 已排除的组合（逐个试过）
+
+| transformers | diffusers | 结果 |
+|---|---|---|
+| 4.57.6 | 0.39.0 | ❌ 访问违例 |
+| 4.57.6 | 0.35.2 | ❌ 访问违例 |
+| 4.57.6 | **0.37.1（官方 lock）** | ❌ 访问违例 |
+| 4.56.2 | 0.37.1 | ❌ 访问违例 |
+| 4.55.4 | 0.39.0 | ⚠️ 不崩，但 AC-Step 自身报 `Object of type dtype is not JSON serializable` |
+| 4.51.3 | 0.39 / 0.35 | ⚠️ 不崩，但 diffusers 报 `layer_type_validation` 缺失（API 太老） |
+
+另外排除了：DLL 冲突（卸掉 music 环境里的 onnxruntime/misaki/jieba 无效）、torchao（卸掉无效）。
+
+### 结论与建议
+
+- **F 阶段判定：阻塞**。原因是对不上版本的 transformers 在这台 Windows 机器上加载模型即崩，属于环境兼容问题，不是"6GB 显存不够"。
+- 因此**没有拿到显存/耗时数据**，也就不能宣布"可行"或"不可行"。
+- 建议下一轮再试的三条路（按性价比）：
+  1. 用仓库自带的 `install_uv.bat` / `uv sync` 建环境（官方支持路径，能保证与 lock 完全一致）；
+  2. 换 **纯 CPU 版 torch**（不带 CUDA）验证是否为 CUDA 运行时 DLL 引发；
+  3. 若两条都不成，F 标记为"本机暂不支持"，不再投入时间（不采购云 GPU）。
+- 现有 ~16GB 文件（6.5GB 环境 + 9.4GB 权重）保留待复测；不想要可整目录删除。

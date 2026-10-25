@@ -4,7 +4,7 @@
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
-$skip = '[\\/](\.venv|\.git|node_modules|__pycache__|\.pytest_cache|\.ruff_cache|runtime|models)[\\/]'
+$skip = '[\\/](\.venv|\.git|node_modules|__pycache__|\.pytest_cache|\.ruff_cache|runtime|models|work|logs|backups|data)[\\/]'
 
 $patterns = [ordered]@{
     'private key'  = 'BEGIN [A-Z ]*PRIVATE KEY'
