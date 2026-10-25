@@ -89,6 +89,16 @@ class Settings(BaseSettings):
     media_tts_kokoro_dir: str = "models/kokoro"
     media_tts_kokoro_worker: str = "scripts/tts_kokoro_worker.py"
 
+    # 唱歌（M4）：ACE-Step 侧车，默认关；独占显存、串行
+    media_music_enabled: bool = False
+    media_music_python: str = "runtime/python312-music/python.exe"
+    media_music_worker: str = "scripts/music_worker.py"
+    media_music_project: str = "runtime/acestep"
+    media_music_checkpoints: str = "runtime/acestep/runtime/acestep/checkpoints"
+    media_music_dir: str = "data/media/music"
+    media_music_seconds: int = 30
+    media_music_quantization: str = "int8_weight_only"
+
 
 @lru_cache
 def get_settings() -> Settings:

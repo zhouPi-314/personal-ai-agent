@@ -47,6 +47,7 @@ class MediaSettings:
     vision_model: str = ""
     asr_enabled: bool = False
     tts_enabled: bool = False
+    music_enabled: bool = False
     egress_allow: frozenset[str] = frozenset()
 
 
@@ -77,6 +78,7 @@ class MediaRouter:
         vision: OpenAIVisionProvider | None = None,
         asr: object | None = None,
         tts: object | None = None,
+        music: object | None = None,
         tmp_dir: Path | None = None,
         max_bytes: int = 2 * 1024 * 1024,
     ) -> None:
@@ -85,6 +87,7 @@ class MediaRouter:
         self.vision = vision
         self.asr = asr
         self.tts = tts
+        self.music = music
         self.tmp_dir = tmp_dir
         self.max_bytes = max_bytes
         self.provider = provider or LocalStickerProvider(library, rng=rng)
@@ -107,7 +110,55 @@ class MediaRouter:
             return self.settings.asr_enabled
         if capability is Capability.SYNTHESIZE_SPEECH:
             return self.settings.tts_enabled
+        if capability is Capability.GENERATE_MUSIC:
+            return self.settings.music_enabled
         return False
+
+    # ── 唱歌（M4，本地 GPU、独占）──────────────────────────────
+    def generate_music(
+        self,
+        prompt: str,
+        *,
+        chat_key: str,
+        actor: str = "",
+        lyrics: str = "",
+        seconds: int | None = None,
+    ) -> MediaResult:
+        if not self.settings.enabled or not self.settings.music_enabled:
+            return _denied(Capability.GENERATE_MUSIC, "music_disabled")
+        if self.music is None or not getattr(self.music, "available", lambda: False)():
+            return MediaResult(
+                status=ResultStatus.FAILED,
+                capability=Capability.GENERATE_MUSIC,
+                error_code="E_MODEL_UNAVAILABLE",
+            )
+        if self.tmp_dir is None:
+            return MediaResult(
+                status=ResultStatus.FAILED,
+                capability=Capability.GENERATE_MUSIC,
+                error_code="E_CONFIG",
+            )
+
+        result: MediaResult
+        try:
+            result = self.music.generate_music(
+                prompt, out_dir=self.tmp_dir / "music", lyrics=lyrics, seconds=seconds
+            )
+        except Exception as exc:  # noqa: BLE001 - 生成失败不能影响聊天
+            self._emit(actor=actor or chat_key, verdict="failed", detail=str(exc)[:120])
+            return MediaResult(
+                status=ResultStatus.FAILED,
+                capability=Capability.GENERATE_MUSIC,
+                error_code="E_PROVIDER",
+                error_detail=str(exc)[:120],
+            )
+
+        self._emit(
+            actor=actor or chat_key,
+            verdict="allowed" if result.status is ResultStatus.OK else "failed",
+            detail="music status=" + result.status.value + " code=" + result.error_code,
+        )
+        return result
 
     # ── 语音合成（M3，本地执行、不出网）────────────────────────
     def synthesize_speech(

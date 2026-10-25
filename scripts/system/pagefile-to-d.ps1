@@ -46,28 +46,41 @@ if ($cs.AutomaticManagedPagefile) {
     Write-Host '已关闭"自动管理分页文件大小"'
 }
 
-function Set-PageFile([string]$path, [int]$initial, [int]$maximum) {
+function Set-PageFile([string]$path, [uint32]$initial, [uint32]$maximum) {
+    # Win32_PageFileSetting 的 InitialSize/MaximumSize 是 uint32，传 Int32 会报「类型不匹配」
     $existing = Get-CimInstance Win32_PageFileSetting -Filter "Name='$path'" -ErrorAction SilentlyContinue
     if ($existing) {
         if ($existing.InitialSize -eq $initial -and $existing.MaximumSize -eq $maximum) {
             Write-Host "已符合目标，无需修改：$path"
             return
         }
-        Set-CimInstance -InputObject $existing -Property @{ InitialSize = $initial; MaximumSize = $maximum }
+        Set-CimInstance -InputObject $existing -Property @{
+            InitialSize = [uint32]$initial
+            MaximumSize = [uint32]$maximum
+        }
         Write-Host "已调整：$path -> $initial / $maximum MB"
     }
     else {
         New-CimInstance -ClassName Win32_PageFileSetting -Property @{
             Name        = $path
-            InitialSize = $initial
-            MaximumSize = $maximum
+            InitialSize = [uint32]$initial
+            MaximumSize = [uint32]$maximum
         } | Out-Null
         Write-Host "已创建：$path -> $initial / $maximum MB"
     }
 }
 
-Set-PageFile -path 'C:\pagefile.sys' -initial $cInitMB -maximum $cInitMB
-Set-PageFile -path $dFile -initial $dInitMB -maximum $dMaxMB
+try {
+    Set-PageFile -path 'C:\pagefile.sys' -initial $cInitMB -maximum $cInitMB
+    Set-PageFile -path $dFile -initial $dInitMB -maximum $dMaxMB
+}
+catch {
+    # 中途失败时恢复自动管理，避免「自动管理已关、又没配置任何分页文件」的危险状态
+    Write-Warning "配置失败：$($_.Exception.Message)，正在恢复自动管理..."
+    Set-CimInstance -InputObject (Get-CimInstance Win32_ComputerSystem) -Property @{ AutomaticManagedPagefile = $true }
+    Write-Error '已恢复自动管理，本次未改动分页文件。'
+    exit 4
+}
 
 Write-Host ''
 Write-Host '当前分页文件设置：'

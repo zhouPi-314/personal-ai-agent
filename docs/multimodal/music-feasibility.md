@@ -144,3 +144,31 @@ Process exited with code -1073741819  (0xC0000005  ACCESS_VIOLATION)
 说明人声确实存在、旋律可辨；唱歌转写本身很难，不能作为音质评分，只作为"不是噪声"的证据。
 
 **推荐配置**：`acestep-v15-turbo` + `offload_to_cpu=True` + `quantization="int8_weight_only"` + `thinking=False`（不加载 LM，省显存）。
+## 11. 已接入 PAA（2026-10-25）
+
+| 项 | 实现 |
+|---|---|
+| 入口 | 主人私聊里出现「唱首歌 / 唱一段 / 来一首 / 给我唱 / 唱一个」 |
+| 交互 | 先回一句「好，我哼一段，等十几秒」，后台生成，完成后**以语音条发出** |
+| 侧车 | `scripts/music_worker.py`（一次性进程，主进程不依赖 torch） |
+| Provider | `media/providers/music_sidecar.py` |
+| 门面 | `MediaRouter.generate_music`（开关 + 审计 + 异常隔离） |
+| 独占 | `_song_busy` 标志，同一时间只跑一首，避免和视觉/语音抢显存 |
+| 输出 | 48k WAV → **128kbps MP3（约 0.46MB）** → `record` 段发送 |
+
+**配置**：
+
+```dotenv
+PAA_MEDIA_ENABLED=true
+PAA_MEDIA_MUSIC_ENABLED=true
+PAA_MEDIA_MUSIC_SECONDS=30
+PAA_MEDIA_MUSIC_QUANTIZATION=int8_weight_only
+```
+
+**真机验证**：端到端生成 1 首（8.0 秒生成、480KB MP3）并成功发到 QQ 私聊。
+
+## 12. 版权与资源约束
+
+- 只做**原创提示词 + 原创歌词**（默认 30 秒），不复刻特定歌手、不复制受版权保护的歌词/旋律；
+- 生成占满显存期间**串行**，失败自动退回文字，不影响聊天；
+- 权重与运行环境全部在 `runtime/`、`models/`（已 gitignore），不进仓库。

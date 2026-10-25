@@ -28,6 +28,7 @@ from .media.context import format_image_block
 from .media.contracts import ResultStatus
 from .media.fetcher import fetch
 from .media.providers.asr_sidecar import ASRSidecarProvider
+from .media.providers.music_sidecar import MusicSidecarProvider
 from .media.providers.vision_openai import OpenAIVisionProvider
 from .media.quarantine import Quarantine
 from .media.router import MediaRouter, MediaSettings
@@ -86,6 +87,7 @@ class QqService:
                 vision_model=settings.media_vision_model,
                 asr_enabled=settings.media_asr_enabled,
                 tts_enabled=settings.media_tts_enabled,
+                music_enabled=settings.media_music_enabled,
                 egress_allow=frozenset(
                     item.strip()
                     for item in (settings.media_egress_allow or "").split(",")
@@ -120,6 +122,19 @@ class QqService:
                 else None
             ),
             tts=(build_tts(settings, PROJECT_ROOT) if settings.media_tts_enabled else None),
+            music=(
+                MusicSidecarProvider(
+                    python_exe=PROJECT_ROOT / settings.media_music_python,
+                    worker_script=PROJECT_ROOT / settings.media_music_worker,
+                    project_root=PROJECT_ROOT / settings.media_music_project,
+                    checkpoints_dir=PROJECT_ROOT / settings.media_music_checkpoints,
+                    ffmpeg=PROJECT_ROOT / settings.media_ffmpeg,
+                    seconds=settings.media_music_seconds,
+                    quantization=settings.media_music_quantization,
+                )
+                if settings.media_music_enabled
+                else None
+            ),
         )
         self.quarantine = Quarantine(
             PROJECT_ROOT / settings.media_quarantine_dir,
@@ -144,6 +159,11 @@ class QqService:
                 }
             },
         )
+        # 唱歌优先：命中就直接回一句、后台去生成，不占用对话模型
+        if self._should_sing(message):
+            self._spawn_song(message)
+            return [OutgoingPart(text="好，我哼一段，等十几秒。", typing_seconds=0.6)]
+
         # 先收录媒体，再走模型：模型 404/超时都不能让学习线丢素材
         self._spawn_learn(message)
         audio = next((ref for ref in message.media if ref.kind == "audio"), None)
@@ -268,6 +288,62 @@ class QqService:
             },
         )
         return parts
+
+    # ── 唱歌（M4）────────────────────────────────────────────
+    SING_HINTS = ("唱首歌", "唱一段", "来首歌", "来一首", "给我唱", "唱一个")
+
+    def _should_sing(self, message: InboundMessage) -> bool:
+        if not self.settings.media_music_enabled or message.is_group:
+            return False
+        if not self.settings.owner_qq or message.sender_id != self.settings.owner_qq:
+            return False
+        if getattr(self, "_song_busy", False):
+            return False
+        text = message.text or ""
+        return any(hint in text for hint in self.SING_HINTS)
+
+    def _spawn_song(self, message: InboundMessage) -> None:
+        self._song_busy = True
+        task = asyncio.create_task(asyncio.to_thread(self._sing_sync, message))
+        self._learn_tasks.add(task)
+        task.add_done_callback(self._learn_tasks.discard)
+
+    def _sing_sync(self, message: InboundMessage) -> None:
+        """后台生成并发送。生成期间独占显存，失败就退回文字。"""
+        try:
+            result = self.media.generate_music(
+                message.text,
+                chat_key=message.chat_key,
+                actor=f"qq:{message.sender_id}",
+            )
+            if result.status is ResultStatus.OK:
+                self.sender.send_record(
+                    message.chat_key, Path(str(result.data.get("path") or ""))
+                )
+                self.log.info(
+                    "唱歌完成",
+                    extra={
+                        "fields": {
+                            "chat": message.chat_key,
+                            "bytes": result.data.get("bytes"),
+                            "gen_s": result.data.get("gen_s"),
+                        }
+                    },
+                )
+            else:
+                self.sender.send(
+                    message.chat_key,
+                    "这次没唱成（" + (result.error_code or result.status.value) + "），下次再试。",
+                )
+                self.log.warning("唱歌失败：%s", result.error_code)
+        except Exception as exc:  # noqa: BLE001 - 唱歌失败不能影响聊天
+            self.log.warning("唱歌异常：%s", exc)
+            try:
+                self.sender.send(message.chat_key, "这次没唱成，下次再试。")
+            except Exception as again:  # noqa: BLE001
+                self.log.warning("唱歌失败提示也发不出去：%s", again)
+        finally:
+            self._song_busy = False
 
     def _should_speak(self, message: InboundMessage) -> bool:
         if not self.settings.media_tts_enabled:
