@@ -86,6 +86,14 @@ class Settings(BaseSettings):
     media_tts_provider: str = "kokoro"  # kokoro | sapi | voicevox
     media_voicevox_url: str = "http://127.0.0.1:50021"
     media_voicevox_speaker: int = 3
+
+    # Qwen3-TTS 克隆（0.6B）：provider=qwen 时启用
+    media_qwen_python: str = "runtime/python312-music/python.exe"
+    media_qwen_worker: str = "scripts/tts_qwen_worker.py"
+    media_qwen_model_dir: str = "models/qwen-tts-0.6b"
+    media_qwen_voices_dir: str = "data/voices"
+    media_qwen_default_voice: str = ""
+    media_qwen_device: str = "cuda"
     media_tts_kokoro_voice: str = "zf_001"
     media_tts_kokoro_model: str = "model.onnx"  # fp32 在本机比 int8 快 8 倍
     media_tts_kokoro_dir: str = "models/kokoro"

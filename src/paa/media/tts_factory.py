@@ -6,6 +6,7 @@ from pathlib import Path
 
 from ..config import Settings
 from .providers.tts_kokoro import KokoroTTSProvider
+from .providers.tts_qwen import QwenTTSProvider
 from .providers.tts_sapi import SapiTTSProvider
 from .providers.tts_voicevox import VoicevoxTTSProvider
 
@@ -19,6 +20,17 @@ def build_tts(settings: Settings, project_root: Path):
     provider = (settings.media_tts_provider or "kokoro").strip().lower()
     if provider == "sapi":
         return sapi
+    if provider == "qwen":
+        qwen = QwenTTSProvider(
+            python_exe=project_root / settings.media_qwen_python,
+            worker_script=project_root / settings.media_qwen_worker,
+            model_dir=project_root / settings.media_qwen_model_dir,
+            voices_root=project_root / settings.media_qwen_voices_dir,
+            default_voice=settings.media_qwen_default_voice,
+            device=settings.media_qwen_device,
+            max_chars=settings.media_tts_max_chars,
+        )
+        return qwen if qwen.available() else sapi
     if provider == "voicevox":
         voicevox = VoicevoxTTSProvider(
             base_url=settings.media_voicevox_url,

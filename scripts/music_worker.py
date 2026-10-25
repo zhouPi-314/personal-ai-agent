@@ -16,6 +16,15 @@ import traceback
 for _k in ("http_proxy", "https_proxy", "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY"):
     os.environ.pop(_k, None)
 
+# AC-Step 用 loguru 往 stdout 打日志，会污染 JSON 行协议；统一改到 stderr。
+import contextlib as _contextlib
+
+with _contextlib.suppress(Exception):
+    from loguru import logger as _logger
+
+    _logger.remove()
+    _logger.add(sys.stderr, level="INFO")
+
 
 def _release(*objects) -> None:
     """把模型与显存还给系统：唱歌是低频操作，用完就退比常驻更划算。"""
@@ -71,13 +80,19 @@ def handle(request: dict) -> dict:
 
         llm_started = time.perf_counter()
         llm = LLMHandler()
+        import torch as _torch
+
+        lm_dtype = None
+        if str(request.get("lm_dtype") or "").lower() == "bf16":
+            lm_dtype = _torch.bfloat16  # CPU 上省一半内存，避免和 DiT 的 CPU 副本一起把 RAM 撑爆
         lm_msg, lm_ok = llm.initialize(
             checkpoint_dir=os.path.join(project_root, "runtime", "acestep", "checkpoints"),
             lm_model_path=request.get("lm_model") or "acestep-5Hz-lm-1.7B",
             backend="pt",
-            device="auto",
+            # LM 默认放 CPU：1.7B fp32 约占 6.8GB RAM，但 GPU 只有 6GB，和 DiT 抢会 OOM
+            device=request.get("lm_device") or "cpu",
             offload_to_cpu=True,
-            dtype=None,
+            dtype=lm_dtype,
         )
         llm_s = round(time.perf_counter() - llm_started, 1)
         if not lm_ok:

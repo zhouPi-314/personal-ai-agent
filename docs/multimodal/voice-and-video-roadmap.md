@@ -102,3 +102,30 @@ Kokoro 是**固定音色**的模型，不能克隆。要"学某个音色"必须�
 
 **署名**：VOICEVOX 多数角色条款要求标注角色名。适配器已在 `VoicevoxVoice.credit` 里保留角色名，
 需要时在回复末尾追加一次署名；如果所用角色条款不要求，可以不显示。
+## 8. Qwen3-TTS 克隆：已接通（2026-10-25 夜）
+
+| 项 | 结果 |
+|---|---|
+| 模型 | Qwen3-TTS **0.6B**（Apache-2.0，2.34GB，落在 `models/qwen-tts-0.6b`，D 盘） |
+| 侧车 | `scripts/tts_qwen_worker.py`（常驻循环，模型只加载一次） |
+| Provider | `media/providers/tts_qwen.py`（`clone` / `custom` 两种模式） |
+| 音色登记 | `media/voices.py` → `data/voices/index.json`，**必须**填 `license_kind`（`derivative-allowed` / `self-authorized`）+ 来源 |
+| 实测 | 参考音色克隆：5.68 秒音频用时 10.6 秒；ASR 回读「你好，这是用参考音色合成的语音…」**可听清** |
+| 真机 | 已通过 QQ 发送一条克隆语音（7.04 秒） |
+
+**已知坑**：参考音频没有转写文本时，必须 `x_vector_only_mode=True`，否则 `create_voice_clone_prompt` 报错。
+已在侧车里按「有无 ref_text」自动处理。
+
+## 9. ACE-Step LM：定位到「组合加载」才崩
+
+| 实验 | 结果 |
+|---|---|
+| LM 单独初始化（cuda / cpu，backend=pt） | ✅ 成功，28 秒 |
+| LM 单独初始化，dtype=bf16 on CPU | ✅ 成功 |
+| **已加载 DiT 后再初始化 LM** | ❌ 访问违例 `0xC0000005`（bf16、CPU、GPU 都试过） |
+
+结论：不是 LM 本身坏，而是**同一个进程里 DiT（int8，约 4.8GB 显存/CPU 副本）与 1.7B LM 共存**时崩。
+这与显存和内存都有关，属于"进程内顺序"问题，不是配置能解决的。
+
+**下一步方案**（推荐）：不再自己拼 handler，改用 ACE-Step 官方 API 服务（它自己管理模型生命周期与卸载），
+PAA 只当 HTTP 客户端。这样唱歌的"人声"能力由上游负责，我们只负责调度与发送。

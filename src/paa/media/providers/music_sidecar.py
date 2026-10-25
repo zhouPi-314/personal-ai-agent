@@ -27,8 +27,9 @@ class MusicSidecarProvider:
         ffmpeg: Path,
         seconds: int = DEFAULT_SECONDS,
         quantization: str = "int8_weight_only",
-        thinking: bool = False,  # 1.7B LM 在当前环境初始化会崩，先关；确认可用后再打开
+        thinking: bool = False,
         lm_model: str = "acestep-5Hz-lm-1.7B",
+        lm_device: str = "cpu",
         timeout: float = 900.0,
     ) -> None:
         self.python_exe = python_exe
@@ -40,6 +41,7 @@ class MusicSidecarProvider:
         self.quantization = quantization
         self.thinking = thinking
         self.lm_model = lm_model
+        self.lm_device = lm_device
         self.timeout = timeout
 
     def available(self) -> bool:
@@ -93,6 +95,7 @@ class MusicSidecarProvider:
                     "quantization": self.quantization,
                     "thinking": self.thinking,
                     "lm_model": self.lm_model,
+                    "lm_device": self.lm_device,
                     "ffmpeg": str(self.ffmpeg),
                 },
                 timeout=timeout,
